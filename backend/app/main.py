@@ -92,11 +92,15 @@ async def bad_request_exception_handler(
 # -------------------------------------------------------------------------
 from app.modules.auth.router import router as auth_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.delivery.router import router as delivery_router
+from app.modules.jobs.router import router as jobs_router
 from app.modules.projects.router import router as projects_router
 
 app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(projects_router)
+app.include_router(jobs_router)
+app.include_router(delivery_router)
 
 
 # -------------------------------------------------------------------------

@@ -9,6 +9,8 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
+import Jobs from '@/pages/Jobs';
+import JobDetail from '@/pages/JobDetail';
 import { ROUTES } from '@/utils/constants';
 
 // Placeholder temporário para páginas ainda não implementadas
@@ -67,11 +69,11 @@ function App() {
                   />
                   <Route
                     path={ROUTES.JOBS}
-                    element={<PagePlaceholder name="Jobs" />}
+                    element={<Jobs />}
                   />
                   <Route
                     path={ROUTES.JOB_DETAIL}
-                    element={<PagePlaceholder name="Detalhes do Job" />}
+                    element={<JobDetail />}
                   />
                   <Route
                     path={ROUTES.EXECUTIONS}

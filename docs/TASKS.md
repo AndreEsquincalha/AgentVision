@@ -449,19 +449,19 @@
 
 #### 5.1 Backend — Módulo Jobs
 
-- [ ] **5.1.1** Criar `modules/jobs/models.py` com modelo Job
+- [X] **5.1.1** Criar `modules/jobs/models.py` com modelo Job
   - Campos: id, project_id (FK), name, cron_expression, agent_prompt, prompt_template_id (FK nullable), execution_params (JSON), is_active
   - Herdar de SoftDeleteModel
   - Relacionamentos: Project (many-to-one), Executions (one-to-many), DeliveryConfigs (one-to-many)
 
-- [ ] **5.1.2** Criar `modules/jobs/schemas.py` com schemas Pydantic
+- [X] **5.1.2** Criar `modules/jobs/schemas.py` com schemas Pydantic
   - JobCreate (project_id, name, cron_expression, agent_prompt, prompt_template_id, execution_params, delivery_configs)
   - JobUpdate (todos opcionais)
   - JobResponse (todos os campos + nome do projeto)
   - JobListResponse (paginado)
   - Validação de cron expression
 
-- [ ] **5.1.3** Criar `modules/jobs/repository.py` com JobRepository
+- [X] **5.1.3** Criar `modules/jobs/repository.py` com JobRepository
   - get_all(page, per_page, filters) → lista paginada
   - get_by_id(id) → Job | None
   - get_by_project_id(project_id) → lista de Jobs
@@ -471,7 +471,7 @@
   - get_active_jobs() → lista de Jobs ativos
   - count_active() → int
 
-- [ ] **5.1.4** Criar `modules/jobs/service.py` com JobService
+- [X] **5.1.4** Criar `modules/jobs/service.py` com JobService
   - list_jobs(page, per_page, filters) → PaginatedResponse
   - get_job(id) → JobResponse
   - create_job(data) → JobResponse
@@ -481,7 +481,7 @@
   - trigger_dry_run(id) → Execution (dispara task Celery)
   - get_next_execution_time(cron_expression) → datetime
 
-- [ ] **5.1.5** Criar `modules/jobs/router.py` com endpoints
+- [X] **5.1.5** Criar `modules/jobs/router.py` com endpoints
   - GET /api/jobs — listar jobs (paginado, filtros por projeto e status)
   - GET /api/jobs/:id — detalhe do job
   - POST /api/jobs — criar job
@@ -490,52 +490,52 @@
   - PATCH /api/jobs/:id/toggle — ativar/desativar
   - POST /api/jobs/:id/dry-run — executar dry run
 
-- [ ] **5.1.6** Gerar migração Alembic para tabela jobs
+- [X] **5.1.6** Gerar migração Alembic para tabela jobs
   - `alembic revision --autogenerate -m "create_jobs_table"`
   - Revisar e executar migração
 
 #### 5.2 Backend — Módulo Delivery (Config)
 
-- [ ] **5.2.1** Criar `modules/delivery/models.py` com modelos DeliveryConfig e DeliveryLog
+- [X] **5.2.1** Criar `modules/delivery/models.py` com modelos DeliveryConfig e DeliveryLog
   - DeliveryConfig: id, job_id (FK), channel_type (enum: email, onedrive, webhook), recipients (JSON), channel_config (JSON), is_active
   - DeliveryLog: id, execution_id (FK), delivery_config_id (FK), channel_type, status (enum: pending, sent, failed), error_message, sent_at
   - Ambos herdando de BaseModel/SoftDeleteModel conforme adequado
 
-- [ ] **5.2.2** Criar `modules/delivery/schemas.py` com schemas
+- [X] **5.2.2** Criar `modules/delivery/schemas.py` com schemas
   - DeliveryConfigCreate (channel_type, recipients, channel_config)
   - DeliveryConfigUpdate
   - DeliveryConfigResponse
   - DeliveryLogResponse
 
-- [ ] **5.2.3** Criar `modules/delivery/repository.py` com DeliveryRepository
+- [X] **5.2.3** Criar `modules/delivery/repository.py` com DeliveryRepository
   - get_configs_by_job(job_id) → lista de DeliveryConfigs
   - create_config(data) → DeliveryConfig
   - create_log(data) → DeliveryLog
   - get_logs_by_execution(execution_id) → lista de DeliveryLogs
 
-- [ ] **5.2.4** Criar `modules/delivery/base_channel.py` com classe abstrata
+- [X] **5.2.4** Criar `modules/delivery/base_channel.py` com classe abstrata
   - Classe abstrata `DeliveryChannel`
   - Método abstrato `send(execution, pdf_path, config) → DeliveryResult`
   - Classe `DeliveryResult` (success, error_message)
 
-- [ ] **5.2.5** Criar `modules/delivery/email_channel.py` com implementação de email
+- [X] **5.2.5** Criar `modules/delivery/email_channel.py` com implementação de email
   - Classe `EmailChannel` implementando `DeliveryChannel`
   - Método `send()`: enviar email com PDF anexo via SMTP
   - Configuração SMTP via Settings do banco ou variáveis de ambiente
   - Template básico de email (HTML)
 
-- [ ] **5.2.6** Criar `modules/delivery/service.py` com DeliveryService
+- [X] **5.2.6** Criar `modules/delivery/service.py` com DeliveryService
   - Factory method para instanciar canal correto pelo tipo
   - deliver(execution, delivery_configs) → lista de DeliveryLogs
   - retry_delivery(delivery_log_id) → DeliveryLog
 
-- [ ] **5.2.7** Gerar migração Alembic para tabelas delivery_configs e delivery_logs
+- [X] **5.2.7** Gerar migração Alembic para tabelas delivery_configs e delivery_logs
   - `alembic revision --autogenerate -m "create_delivery_tables"`
   - Revisar e executar migração
 
 #### 5.3 Frontend — Módulo Jobs
 
-- [ ] **5.3.1** Criar `src/services/jobs.ts` com serviço de API
+- [X] **5.3.1** Criar `src/services/jobs.ts` com serviço de API
   - getJobs(params) → PaginatedResponse<Job>
   - getJob(id) → Job
   - createJob(data) → Job
@@ -544,7 +544,7 @@
   - toggleJob(id, isActive) → Job
   - dryRun(id) → Execution
 
-- [ ] **5.3.2** Criar `src/hooks/useJobs.ts` com hooks React Query
+- [X] **5.3.2** Criar `src/hooks/useJobs.ts` com hooks React Query
   - useJobs(params) — listagem
   - useJob(id) — detalhe
   - useCreateJob() — mutation
@@ -553,14 +553,14 @@
   - useToggleJob() — mutation
   - useDryRun() — mutation
 
-- [ ] **5.3.3** Criar `src/pages/Jobs.tsx` — listagem de jobs
+- [X] **5.3.3** Criar `src/pages/Jobs.tsx` — listagem de jobs
   - PageHeader com título "Jobs" e botão "Novo Job"
   - Filtros: busca, select de projeto, select de status (ativo/inativo)
   - DataTable com colunas: nome, projeto, cron, próxima execução, status, ações
   - Toggle de ativação inline na tabela
   - Ações: visualizar, editar, dry run, excluir
 
-- [ ] **5.3.4** Criar componente `JobForm.tsx` (modal ou página)
+- [X] **5.3.4** Criar componente `JobForm.tsx` (modal ou página)
   - Select de projeto
   - Campo nome
   - Campo cron expression com helper visual (preview da próxima execução)
@@ -569,7 +569,7 @@
   - Seção de canais de entrega: botão para adicionar canal, tipo (email), destinatários
   - Validação com react-hook-form + zod
 
-- [ ] **5.3.5** Criar `src/pages/JobDetail.tsx` — detalhe do job
+- [X] **5.3.5** Criar `src/pages/JobDetail.tsx` — detalhe do job
   - Informações do job em cards
   - Configuração de cron com próxima execução calculada
   - Prompt configurado

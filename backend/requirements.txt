@@ -44,3 +44,4 @@ reportlab==4.2.5
 # Utilitarios
 python-dotenv==1.0.1
 httpx==0.28.1
+croniter==6.0.2
