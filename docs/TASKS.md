@@ -4,14 +4,14 @@
 
 #### 1.1 Configuração do ambiente Docker
 
-- [ ] **1.1.1** Criar `docker-compose.yml` com serviços: PostgreSQL, Redis, MinIO
+- [X] **1.1.1** Criar `docker-compose.yml` com serviços: PostgreSQL, Redis, MinIO
   - Definir volumes persistentes para PostgreSQL e MinIO
   - Configurar variáveis de ambiente para cada serviço
   - Definir network interna para comunicação entre containers
   - Configurar health checks para cada serviço
   - Expor portas: PostgreSQL (5432), Redis (6379), MinIO (9000/9001)
 
-- [ ] **1.1.2** Criar `.env.example` com todas as variáveis de ambiente do projeto
+- [X] **1.1.2** Criar `.env.example` com todas as variáveis de ambiente do projeto
   - Variáveis do PostgreSQL (host, port, user, password, database)
   - Variáveis do Redis (host, port)
   - Variáveis do MinIO (endpoint, access_key, secret_key, bucket)
@@ -19,19 +19,19 @@
   - Variáveis de criptografia (encryption_key)
   - Variáveis de CORS (allowed_origins)
 
-- [ ] **1.1.3** Criar `Dockerfile` do backend
+- [X] **1.1.3** Criar `Dockerfile` do backend
   - Imagem base Python 3.13 slim
   - Instalar dependências do sistema (libpq-dev para psycopg2)
   - Copiar requirements.txt e instalar dependências Python
   - Copiar código da aplicação
   - Comando de inicialização com Uvicorn
 
-- [ ] **1.1.4** Criar `Dockerfile` do frontend
+- [X] **1.1.4** Criar `Dockerfile` do frontend
   - Stage de build: Node 20 alpine, npm install, npm run build
   - Stage de produção: Nginx alpine servindo os arquivos estáticos
   - Configuração do Nginx para SPA (fallback para index.html)
 
-- [ ] **1.1.5** Adicionar serviços backend, frontend, worker e beat ao `docker-compose.yml`
+- [X] **1.1.5** Adicionar serviços backend, frontend, worker e beat ao `docker-compose.yml`
   - Backend: depende de PostgreSQL, Redis, MinIO
   - Frontend: depende de backend
   - Worker Celery: mesmo Dockerfile do backend, comando diferente
@@ -40,7 +40,7 @@
 
 #### 1.2 Setup do Backend (FastAPI)
 
-- [ ] **1.2.1** Criar `requirements.txt` com todas as dependências
+- [X] **1.2.1** Criar `requirements.txt` com todas as dependências
   - fastapi, uvicorn[standard], sqlalchemy, alembic, psycopg2-binary
   - celery[redis], redis, python-jose[cryptography], passlib[bcrypt]
   - pydantic, pydantic-settings, python-multipart
@@ -50,7 +50,7 @@
   - reportlab ou weasyprint (PDF)
   - python-dotenv, httpx
 
-- [ ] **1.2.2** Criar `app/config.py` com pydantic-settings
+- [X] **1.2.2** Criar `app/config.py` com pydantic-settings
   - Classe `Settings` herdando `BaseSettings`
   - Configurações do banco (DATABASE_URL)
   - Configurações do Redis (REDIS_URL)
@@ -60,48 +60,48 @@
   - Configurações de CORS
   - Model_config com env_file=".env"
 
-- [ ] **1.2.3** Criar `app/database.py` com engine e session do SQLAlchemy
+- [X] **1.2.3** Criar `app/database.py` com engine e session do SQLAlchemy
   - Criar engine assíncrono com create_async_engine ou síncrono com create_engine
   - Criar SessionLocal com sessionmaker
   - Criar Base declarativa para os models
   - Função get_db() como dependency do FastAPI
 
-- [ ] **1.2.4** Criar `app/main.py` com a aplicação FastAPI
+- [X] **1.2.4** Criar `app/main.py` com a aplicação FastAPI
   - Instanciar FastAPI com título, descrição e versão
   - Configurar CORS middleware
   - Incluir routers de cada módulo com prefixos
   - Endpoint de health check (GET /)
   - Eventos de startup/shutdown se necessário
 
-- [ ] **1.2.5** Criar `app/dependencies.py` com dependências compartilhadas
+- [X] **1.2.5** Criar `app/dependencies.py` com dependências compartilhadas
   - Dependency de autenticação (get_current_user)
   - Dependency de sessão do banco (get_db)
   - Dependency de storage (get_storage_client)
 
-- [ ] **1.2.6** Configurar Alembic para migrações
+- [X] **1.2.6** Configurar Alembic para migrações
   - Executar `alembic init alembic`
   - Configurar `alembic.ini` com URL do banco
   - Configurar `alembic/env.py` para importar os models e a Base
   - Criar migração inicial vazia para validar setup
 
-- [ ] **1.2.7** Criar `app/shared/models.py` com base model compartilhado
+- [X] **1.2.7** Criar `app/shared/models.py` com base model compartilhado
   - Classe `BaseModel` com campos id (UUID), created_at, updated_at
   - Classe `SoftDeleteModel` herdando BaseModel + deleted_at
   - Configurar updated_at com onupdate automático
 
-- [ ] **1.2.8** Criar `app/shared/schemas.py` com schemas compartilhados
+- [X] **1.2.8** Criar `app/shared/schemas.py` com schemas compartilhados
   - Schema base com id, created_at, updated_at
   - Schema de paginação (page, per_page, total, items)
   - Schema de resposta padrão (success, message, data)
 
-- [ ] **1.2.9** Criar `app/shared/exceptions.py` com exceções customizadas
+- [X] **1.2.9** Criar `app/shared/exceptions.py` com exceções customizadas
   - NotFoundException (404)
   - UnauthorizedException (401)
   - ForbiddenException (403)
   - BadRequestException (400)
   - Handler global de exceções para a aplicação FastAPI
 
-- [ ] **1.2.10** Criar `app/shared/storage.py` com client MinIO/S3
+- [X] **1.2.10** Criar `app/shared/storage.py` com client MinIO/S3
   - Classe StorageClient com boto3
   - Método upload_file(bucket, key, file_data, content_type)
   - Método download_file(bucket, key)
@@ -109,12 +109,12 @@
   - Método delete_file(bucket, key)
   - Inicialização do bucket no startup se não existir
 
-- [ ] **1.2.11** Criar `app/shared/utils.py` com utilitários
+- [X] **1.2.11** Criar `app/shared/utils.py` com utilitários
   - Função de criptografia encrypt_value(value) / decrypt_value(encrypted)
   - Função generate_uuid()
   - Função utc_now()
 
-- [ ] **1.2.12** Criar `app/celery_app.py` com instância do Celery
+- [X] **1.2.12** Criar `app/celery_app.py` com instância do Celery
   - Instanciar Celery com broker Redis
   - Configurar backend de resultados (Redis)
   - Configurar autodiscover de tasks nos módulos
@@ -123,23 +123,23 @@
 
 #### 1.3 Setup do Frontend (React + Vite)
 
-- [ ] **1.3.1** Inicializar projeto com Vite + React + TypeScript
+- [X] **1.3.1** Inicializar projeto com Vite + React + TypeScript
   - `npm create vite@latest frontend -- --template react-ts`
   - Configurar `vite.config.ts` com proxy para API backend
   - Configurar path aliases (@/ para src/)
 
-- [ ] **1.3.2** Instalar e configurar TailwindCSS
+- [X] **1.3.2** Instalar e configurar TailwindCSS
   - `npm install -D tailwindcss @tailwindcss/vite`
   - Configurar `tailwind.config.ts` com cores customizadas do design system
   - Configurar `index.css` com layers base, components, utilities
   - Adicionar fonte Inter via @import ou link
 
-- [ ] **1.3.3** Instalar e configurar shadcn/ui
+- [X] **1.3.3** Instalar e configurar shadcn/ui
   - `npx shadcn@latest init`
   - Configurar tema dark como padrão
   - Configurar cores customizadas no CSS variables
 
-- [ ] **1.3.4** Instalar dependências do frontend
+- [X] **1.3.4** Instalar dependências do frontend
   - react-router-dom (rotas)
   - axios (HTTP client)
   - lucide-react (ícones)
@@ -147,28 +147,28 @@
   - react-hook-form + zod (formulários e validação)
   - @tanstack/react-query (cache e estado de servidor)
 
-- [ ] **1.3.5** Criar `src/types/index.ts` com tipos TypeScript
+- [X] **1.3.5** Criar `src/types/index.ts` com tipos TypeScript
   - Interfaces para todas as entidades (User, Project, Job, Execution, etc.)
   - Tipos de status (ExecutionStatus, DeliveryStatus, ChannelType)
   - Tipos de paginação (PaginatedResponse, PaginationParams)
   - Tipos de API (ApiResponse, ApiError)
   - Tipos de LLM (LLMProvider, LLMModel, LLMConfig)
 
-- [ ] **1.3.6** Criar `src/utils/constants.ts` com constantes
+- [X] **1.3.6** Criar `src/utils/constants.ts` com constantes
   - Rotas da aplicação (ROUTES)
   - Endpoints da API (API_ENDPOINTS)
   - Mapeamento de providers e modelos de LLM
   - Mapeamento de status para cores/labels
   - Valores padrão de paginação
 
-- [ ] **1.3.7** Criar `src/utils/formatters.ts` com funções de formatação
+- [X] **1.3.7** Criar `src/utils/formatters.ts` com funções de formatação
   - formatDate(date) — data em pt-BR
   - formatDateTime(date) — data e hora em pt-BR
   - formatDuration(seconds) — duração legível
   - formatStatus(status) — label em português
   - truncateText(text, maxLength)
 
-- [ ] **1.3.8** Criar `src/services/api.ts` com instância Axios configurada
+- [X] **1.3.8** Criar `src/services/api.ts` com instância Axios configurada
   - Base URL apontando para o backend
   - Interceptor de request para adicionar Authorization header
   - Interceptor de response para tratar 401 (refresh token)

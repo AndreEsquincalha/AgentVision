@@ -9,6 +9,7 @@ build/
 venv/
 env/
 agents/
+claude.md
 
 # Node
 node_modules/

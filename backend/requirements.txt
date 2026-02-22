@@ -1,0 +1,45 @@
+# =============================================================================
+# AgentVision - Dependencias Python
+# =============================================================================
+
+# Framework web
+fastapi==0.115.13
+uvicorn[standard]==0.34.0
+
+# ORM e banco de dados
+sqlalchemy==2.0.40
+alembic==1.14.1
+psycopg2-binary==2.9.10
+
+# Task queue
+celery[redis]==5.4.0
+redis==5.2.1
+
+# Validacao e configuracao
+pydantic==2.10.6
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# Autenticacao e seguranca
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+cryptography==44.0.0
+
+# Storage (MinIO/S3)
+boto3==1.36.26
+
+# Automacao de navegador
+browser-use==0.2.2
+playwright==1.50.0
+
+# SDKs de LLM
+anthropic==0.45.0
+openai==1.63.0
+google-generativeai==0.8.4
+
+# Geracao de PDF
+reportlab==4.2.5
+
+# Utilitarios
+python-dotenv==1.0.1
+httpx==0.28.1
