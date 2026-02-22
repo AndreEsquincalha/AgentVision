@@ -52,6 +52,8 @@ export interface Project {
   llm_max_tokens: number;
   llm_timeout: number;
   is_active: boolean;
+  has_credentials: boolean;
+  has_llm_api_key: boolean;
   jobs_count?: number;
   active_jobs_count?: number;
   created_at: string;
@@ -68,7 +70,7 @@ export interface ProjectCreate {
   };
   llm_provider: LLMProvider;
   llm_model: string;
-  llm_api_key: string;
+  llm_api_key?: string;
   llm_temperature: number;
   llm_max_tokens: number;
   llm_timeout: number;

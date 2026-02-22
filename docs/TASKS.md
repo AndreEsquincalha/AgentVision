@@ -362,21 +362,21 @@
 
 #### 4.1 Backend — Módulo Projects
 
-- [ ] **4.1.1** Criar `modules/projects/models.py` com modelo Project
+- [X] **4.1.1** Criar `modules/projects/models.py` com modelo Project
   - Campos: id, name, base_url, description, encrypted_credentials
   - Campos LLM: llm_provider, llm_model, encrypted_llm_api_key, llm_temperature, llm_max_tokens, llm_timeout
   - Campo is_active (boolean)
   - Herdar de SoftDeleteModel
   - Relacionamento com Jobs (one-to-many)
 
-- [ ] **4.1.2** Criar `modules/projects/schemas.py` com schemas Pydantic
+- [X] **4.1.2** Criar `modules/projects/schemas.py` com schemas Pydantic
   - ProjectCreate (name, base_url, description, credentials, llm_provider, llm_model, llm_api_key, llm_temperature, llm_max_tokens, llm_timeout)
   - ProjectUpdate (todos opcionais)
   - ProjectResponse (todos os campos menos credentials e api_key em texto puro)
   - ProjectListResponse (paginado)
   - Validações: URL válida, temperature entre 0 e 2, max_tokens > 0
 
-- [ ] **4.1.3** Criar `modules/projects/repository.py` com ProjectRepository
+- [X] **4.1.3** Criar `modules/projects/repository.py` com ProjectRepository
   - get_all(page, per_page, filters) → lista paginada
   - get_by_id(id) → Project | None
   - create(project_data) → Project
@@ -384,7 +384,7 @@
   - soft_delete(id) → None
   - count_active() → int
 
-- [ ] **4.1.4** Criar `modules/projects/service.py` com ProjectService
+- [X] **4.1.4** Criar `modules/projects/service.py` com ProjectService
   - list_projects(page, per_page, filters) → PaginatedResponse
   - get_project(id) → ProjectResponse
   - create_project(data) → ProjectResponse (criptografar credentials e api_key)
@@ -393,7 +393,7 @@
   - get_decrypted_credentials(id) → dict (para uso interno pelo agente)
   - get_llm_config(id) → LLMConfig (para uso interno pelo agente)
 
-- [ ] **4.1.5** Criar `modules/projects/router.py` com endpoints
+- [X] **4.1.5** Criar `modules/projects/router.py` com endpoints
   - GET /api/projects — listar projetos (paginado, filtros)
   - GET /api/projects/:id — detalhe do projeto
   - POST /api/projects — criar projeto
@@ -401,27 +401,27 @@
   - DELETE /api/projects/:id — soft delete
   - Todos os endpoints requerem autenticação
 
-- [ ] **4.1.6** Gerar migração Alembic para tabela projects
+- [X] **4.1.6** Gerar migração Alembic para tabela projects
   - `alembic revision --autogenerate -m "create_projects_table"`
   - Revisar e executar migração
 
 #### 4.2 Frontend — Módulo Projetos
 
-- [ ] **4.2.1** Criar `src/services/projects.ts` com serviço de API
+- [X] **4.2.1** Criar `src/services/projects.ts` com serviço de API
   - getProjects(params) → PaginatedResponse<Project>
   - getProject(id) → Project
   - createProject(data) → Project
   - updateProject(id, data) → Project
   - deleteProject(id) → void
 
-- [ ] **4.2.2** Criar `src/hooks/useProjects.ts` com hooks React Query
+- [X] **4.2.2** Criar `src/hooks/useProjects.ts` com hooks React Query
   - useProjects(params) — listagem paginada com filtros
   - useProject(id) — detalhe de um projeto
   - useCreateProject() — mutation de criação
   - useUpdateProject() — mutation de atualização
   - useDeleteProject() — mutation de exclusão
 
-- [ ] **4.2.3** Criar `src/pages/Projects.tsx` — listagem de projetos
+- [X] **4.2.3** Criar `src/pages/Projects.tsx` — listagem de projetos
   - PageHeader com título "Projetos" e botão "Novo Projeto"
   - Filtros: campo de busca por nome, select de status
   - DataTable com colunas: nome, URL, provider LLM, jobs ativos, status, ações
@@ -429,7 +429,7 @@
   - Paginação
   - Loading e empty states
 
-- [ ] **4.2.4** Criar componente `ProjectForm.tsx` (modal ou página)
+- [X] **4.2.4** Criar componente `ProjectForm.tsx` (modal ou página)
   - Seção dados básicos: nome, URL base, descrição
   - Seção credenciais: campos de username e password do site alvo
   - Seção configuração LLM: select de provider, select de modelo (dinâmico), campo API key, sliders/inputs para temperature, max_tokens, timeout
@@ -437,7 +437,7 @@
   - Modo criação e edição (preenchimento de dados existentes)
   - Campos sensíveis mascarados no modo edição
 
-- [ ] **4.2.5** Criar `src/pages/ProjectDetail.tsx` — detalhe do projeto
+- [X] **4.2.5** Criar `src/pages/ProjectDetail.tsx` — detalhe do projeto
   - Informações do projeto em cards
   - Seção de configuração LLM exibida
   - Lista de jobs associados

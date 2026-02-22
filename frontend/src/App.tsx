@@ -7,6 +7,8 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
+import Projects from '@/pages/Projects';
+import ProjectDetail from '@/pages/ProjectDetail';
 import { ROUTES } from '@/utils/constants';
 
 // Placeholder temporário para páginas ainda não implementadas
@@ -57,11 +59,11 @@ function App() {
                   <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
                   <Route
                     path={ROUTES.PROJECTS}
-                    element={<PagePlaceholder name="Projetos" />}
+                    element={<Projects />}
                   />
                   <Route
                     path={ROUTES.PROJECT_DETAIL}
-                    element={<PagePlaceholder name="Detalhes do Projeto" />}
+                    element={<ProjectDetail />}
                   />
                   <Route
                     path={ROUTES.JOBS}
