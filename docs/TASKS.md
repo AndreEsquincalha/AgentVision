@@ -181,62 +181,62 @@
 
 #### 2.1 Backend — Módulo Auth
 
-- [ ] **2.1.1** Criar `modules/auth/models.py` com modelo User
+- [X] **2.1.1** Criar `modules/auth/models.py` com modelo User
   - Campos: id, email (unique), hashed_password, name, is_active
   - Herdar de SoftDeleteModel (inclui created_at, updated_at, deleted_at)
   - Índice no campo email
 
-- [ ] **2.1.2** Criar `modules/auth/schemas.py` com schemas Pydantic
+- [X] **2.1.2** Criar `modules/auth/schemas.py` com schemas Pydantic
   - LoginRequest (email, password)
   - TokenResponse (access_token, refresh_token, token_type)
   - RefreshRequest (refresh_token)
   - UserResponse (id, email, name, is_active, created_at)
   - UserCreate (email, password, name) — para seed
 
-- [ ] **2.1.3** Criar `modules/auth/repository.py` com UserRepository
+- [X] **2.1.3** Criar `modules/auth/repository.py` com UserRepository
   - get_by_email(email) → User | None
   - get_by_id(id) → User | None
   - create(user_data) → User
 
-- [ ] **2.1.4** Criar `modules/auth/service.py` com AuthService
+- [X] **2.1.4** Criar `modules/auth/service.py` com AuthService
   - authenticate(email, password) → TokenResponse
   - refresh_token(refresh_token) → TokenResponse
   - Funções auxiliares: create_access_token, create_refresh_token, verify_password, hash_password
   - Decode e validação de token JWT
 
-- [ ] **2.1.5** Criar `modules/auth/router.py` com endpoints
+- [X] **2.1.5** Criar `modules/auth/router.py` com endpoints
   - POST /api/auth/login — login com email e senha
   - POST /api/auth/refresh — renovar access token
   - GET /api/auth/me — retornar dados do usuário autenticado
 
-- [ ] **2.1.6** Criar `scripts/seed.py` para seed do usuário admin
+- [X] **2.1.6** Criar `scripts/seed.py` para seed do usuário admin
   - Criar usuário admin padrão (email: admin@agentvision.com, senha configurável via .env)
   - Verificar se usuário já existe antes de criar
   - Executável via `python -m scripts.seed`
 
-- [ ] **2.1.7** Gerar migração Alembic para tabela users
+- [X] **2.1.7** Gerar migração Alembic para tabela users
   - `alembic revision --autogenerate -m "create_users_table"`
   - Revisar migração gerada
   - Executar `alembic upgrade head`
 
 #### 2.2 Frontend — Autenticação
 
-- [ ] **2.2.1** Criar `src/contexts/AuthContext.tsx`
+- [X] **2.2.1** Criar `src/contexts/AuthContext.tsx`
   - Estado: user, isAuthenticated, isLoading
   - Funções: login, logout, refreshToken
   - Armazenamento de tokens no localStorage (ou httpOnly cookie via backend)
   - Verificação de autenticação no mount (checar token existente)
 
-- [ ] **2.2.2** Criar `src/hooks/useAuth.ts`
+- [X] **2.2.2** Criar `src/hooks/useAuth.ts`
   - Hook que consome AuthContext
   - Retorna user, isAuthenticated, login, logout, isLoading
 
-- [ ] **2.2.3** Criar `src/services/auth.ts` com serviço de autenticação
+- [X] **2.2.3** Criar `src/services/auth.ts` com serviço de autenticação
   - login(email, password) → TokenResponse
   - refresh(refreshToken) → TokenResponse
   - me() → UserResponse
 
-- [ ] **2.2.4** Criar `src/pages/Login.tsx`
+- [X] **2.2.4** Criar `src/pages/Login.tsx`
   - Layout centralizado com card de login
   - Logo AgentVision no topo
   - Campos: email, senha
@@ -245,7 +245,7 @@
   - Mensagem de erro em caso de falha
   - Redirect para dashboard se já autenticado
 
-- [ ] **2.2.5** Configurar rotas em `src/App.tsx`
+- [X] **2.2.5** Configurar rotas em `src/App.tsx`
   - Rota pública: /login → Login.tsx
   - Rotas protegidas: /* → MainLayout (requer auth)
   - Redirect automático para /login se não autenticado

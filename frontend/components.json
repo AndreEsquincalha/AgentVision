@@ -17,5 +17,14 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
+  "resolvedPaths": {
+    "tailwindConfig": "",
+    "tailwindCss": "src/index.css",
+    "components": "src/components",
+    "utils": "src/lib/utils",
+    "ui": "src/components/ui",
+    "lib": "src/lib",
+    "hooks": "src/hooks"
+  },
   "iconLibrary": "lucide"
 }

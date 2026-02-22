@@ -90,10 +90,9 @@ async def bad_request_exception_handler(
 # -------------------------------------------------------------------------
 # Routers dos modulos
 # -------------------------------------------------------------------------
-# Os routers serao incluidos conforme os modulos forem implementados.
-# Exemplo:
-# from app.modules.auth.router import router as auth_router
-# app.include_router(auth_router)
+from app.modules.auth.router import router as auth_router
+
+app.include_router(auth_router)
 
 
 # -------------------------------------------------------------------------
