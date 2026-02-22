@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+agents/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build
+frontend/dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+docker-compose.override.yml
+
+# Alembic
+backend/alembic/versions/__pycache__/
+
+# MinIO data
+minio_data/
+
+# PostgreSQL data
+postgres_data/
+
+# Redis data
+redis_data/
+
+# Logs
+*.log
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+
+# Claude Code
+.claude/
