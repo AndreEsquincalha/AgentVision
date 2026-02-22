@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.shared.models import BaseModel, SoftDeleteModel
 
 if TYPE_CHECKING:
+    from app.modules.executions.models import Execution
     from app.modules.jobs.models import Job
 
 
@@ -115,4 +116,9 @@ class DeliveryLog(BaseModel):
     delivery_config: Mapped['DeliveryConfig'] = relationship(
         'DeliveryConfig',
         back_populates='delivery_logs',
+    )
+    execution: Mapped['Execution'] = relationship(
+        'Execution',
+        back_populates='delivery_logs',
+        foreign_keys=[execution_id],
     )

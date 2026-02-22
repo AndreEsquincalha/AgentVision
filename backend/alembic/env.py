@@ -12,7 +12,7 @@ from app.database import Base
 from app.modules.auth.models import User  # noqa: F401
 from app.modules.projects.models import Project  # noqa: F401
 from app.modules.jobs.models import Job  # noqa: F401
-# from app.modules.executions.models import Execution
+from app.modules.executions.models import Execution  # noqa: F401
 from app.modules.delivery.models import DeliveryConfig, DeliveryLog  # noqa: F401
 # from app.modules.prompts.models import PromptTemplate
 # from app.modules.settings.models import Setting

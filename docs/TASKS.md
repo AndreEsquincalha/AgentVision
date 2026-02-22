@@ -583,18 +583,18 @@
 
 #### 6.1 Backend — Módulo Executions
 
-- [ ] **6.1.1** Criar `modules/executions/models.py` com modelo Execution
+- [X] **6.1.1** Criar `modules/executions/models.py` com modelo Execution
   - Campos: id, job_id (FK), status (enum: pending, running, success, failed), logs (text), extracted_data (JSON), screenshots_path (string), pdf_path (string), is_dry_run (boolean), started_at, finished_at, duration_seconds
   - Herdar de BaseModel (sem soft delete — execuções são registros permanentes)
   - Relacionamentos: Job (many-to-one), DeliveryLogs (one-to-many)
 
-- [ ] **6.1.2** Criar `modules/executions/schemas.py` com schemas
+- [X] **6.1.2** Criar `modules/executions/schemas.py` com schemas
   - ExecutionResponse (todos os campos + nome do job + nome do projeto)
   - ExecutionListResponse (paginado, campos reduzidos)
   - ExecutionDetailResponse (completo com delivery logs)
   - ExecutionFilter (job_id, project_id, status, date_from, date_to)
 
-- [ ] **6.1.3** Criar `modules/executions/repository.py` com ExecutionRepository
+- [X] **6.1.3** Criar `modules/executions/repository.py` com ExecutionRepository
   - get_all(page, per_page, filters) → lista paginada
   - get_by_id(id) → Execution | None
   - get_by_job_id(job_id, limit) → lista de Executions
@@ -603,14 +603,14 @@
   - count_by_status(date_from, date_to) → dict
   - get_recent(limit) → lista de Executions
 
-- [ ] **6.1.4** Criar `modules/executions/service.py` com ExecutionService
+- [X] **6.1.4** Criar `modules/executions/service.py` com ExecutionService
   - list_executions(page, per_page, filters) → PaginatedResponse
   - get_execution(id) → ExecutionDetailResponse
   - get_screenshot_urls(id) → lista de URLs presigned
   - get_pdf_url(id) → URL presigned
   - create_execution(job_id, is_dry_run) → Execution
 
-- [ ] **6.1.5** Criar `modules/executions/router.py` com endpoints
+- [X] **6.1.5** Criar `modules/executions/router.py` com endpoints
   - GET /api/executions — listar execuções (paginado, filtros)
   - GET /api/executions/:id — detalhe da execução
   - GET /api/executions/:id/screenshots — URLs dos screenshots
@@ -618,32 +618,32 @@
   - POST /api/executions/:id/retry-delivery/:delivery_log_id — reenviar entrega
   - Todos requerem autenticação
 
-- [ ] **6.1.6** Gerar migração Alembic para tabela executions
+- [X] **6.1.6** Gerar migração Alembic para tabela executions
   - `alembic revision --autogenerate -m "create_executions_table"`
   - Revisar e executar migração
 
 #### 6.2 Frontend — Módulo Execuções
 
-- [ ] **6.2.1** Criar `src/services/executions.ts` com serviço de API
+- [X] **6.2.1** Criar `src/services/executions.ts` com serviço de API
   - getExecutions(params) → PaginatedResponse<Execution>
   - getExecution(id) → ExecutionDetail
   - getScreenshots(id) → string[] (URLs)
   - getPdfUrl(id) → string (URL)
   - retryDelivery(executionId, deliveryLogId) → DeliveryLog
 
-- [ ] **6.2.2** Criar `src/hooks/useExecutions.ts` com hooks React Query
+- [X] **6.2.2** Criar `src/hooks/useExecutions.ts` com hooks React Query
   - useExecutions(params) — listagem
   - useExecution(id) — detalhe
   - useScreenshots(id) — screenshots
   - useRetryDelivery() — mutation
 
-- [ ] **6.2.3** Criar `src/pages/Executions.tsx` — listagem de execuções
+- [X] **6.2.3** Criar `src/pages/Executions.tsx` — listagem de execuções
   - PageHeader com título "Execuções"
   - Filtros: select de projeto, select de job, select de status, date range
   - DataTable com colunas: job, projeto, status (badge), início, duração, ações
   - Ação: visualizar detalhes
 
-- [ ] **6.2.4** Criar `src/pages/ExecutionDetail.tsx` — detalhe de execução
+- [X] **6.2.4** Criar `src/pages/ExecutionDetail.tsx` — detalhe de execução
   - Card de informações gerais (job, projeto, status, início, fim, duração)
   - Seção "Screenshots" — galeria de imagens com lightbox
   - Seção "Relatório PDF" — botão de download

@@ -11,6 +11,8 @@ import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Jobs from '@/pages/Jobs';
 import JobDetail from '@/pages/JobDetail';
+import Executions from '@/pages/Executions';
+import ExecutionDetail from '@/pages/ExecutionDetail';
 import { ROUTES } from '@/utils/constants';
 
 // Placeholder temporário para páginas ainda não implementadas
@@ -77,11 +79,11 @@ function App() {
                   />
                   <Route
                     path={ROUTES.EXECUTIONS}
-                    element={<PagePlaceholder name="Execuções" />}
+                    element={<Executions />}
                   />
                   <Route
                     path={ROUTES.EXECUTION_DETAIL}
-                    element={<PagePlaceholder name="Detalhes da Execução" />}
+                    element={<ExecutionDetail />}
                   />
                   <Route
                     path={ROUTES.PROMPTS}

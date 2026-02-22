@@ -9,6 +9,7 @@ from app.shared.models import SoftDeleteModel
 
 if TYPE_CHECKING:
     from app.modules.delivery.models import DeliveryConfig
+    from app.modules.executions.models import Execution
     from app.modules.projects.models import Project
 
 
@@ -74,5 +75,11 @@ class Job(SoftDeleteModel):
         'DeliveryConfig',
         back_populates='job',
         lazy='selectin',
+        cascade='all, delete-orphan',
+    )
+    executions: Mapped[list['Execution']] = relationship(
+        'Execution',
+        back_populates='job',
+        lazy='noload',
         cascade='all, delete-orphan',
     )
