@@ -1,21 +1,21 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { MainLayout } from '@/components/layout/MainLayout';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import Login from '@/pages/Login';
+import Dashboard from '@/pages/Dashboard';
 import { ROUTES } from '@/utils/constants';
 
-// Placeholder para a área autenticada (substituído no Sprint 3)
-function AuthenticatedPlaceholder() {
+// Placeholder temporário para páginas ainda não implementadas
+function PagePlaceholder({ name }: { name: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0F1117]">
+    <div className="flex items-center justify-center py-20">
       <div className="text-center">
-        <h1 className="bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] bg-clip-text text-3xl font-bold text-transparent">
-          AgentVision
-        </h1>
-        <p className="mt-4 text-sm text-[#9CA3AF]">
-          Dashboard &mdash; Em construção
-        </p>
+        <h2 className="text-xl font-semibold text-[#F9FAFB]">{name}</h2>
+        <p className="mt-2 text-sm text-[#9CA3AF]">Página em construção</p>
       </div>
     </div>
   );
@@ -38,70 +38,85 @@ const queryClient = new QueryClient({
 
 /**
  * Componente raiz da aplicação AgentVision.
- * Configura providers (QueryClient, Auth) e rotas.
+ * Configura providers (QueryClient, Auth, Tooltip) e rotas.
+ * Rotas protegidas renderizam dentro do MainLayout (Sidebar + Header).
  */
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            {/* Rota pública — Login */}
-            <Route path={ROUTES.LOGIN} element={<Login />} />
+          <TooltipProvider>
+            <Routes>
+              {/* Rota pública — Login */}
+              <Route path={ROUTES.LOGIN} element={<Login />} />
 
-            {/* Rotas protegidas — requer autenticação */}
-            <Route element={<ProtectedRoute />}>
-              <Route
-                path={ROUTES.DASHBOARD}
-                element={<AuthenticatedPlaceholder />}
-              />
-              {/* Placeholder para rotas futuras */}
-              <Route
-                path={ROUTES.PROJECTS}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.PROJECT_DETAIL}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.JOBS}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.JOB_DETAIL}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.EXECUTIONS}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.EXECUTION_DETAIL}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.PROMPTS}
-                element={<AuthenticatedPlaceholder />}
-              />
-              <Route
-                path={ROUTES.SETTINGS}
-                element={<AuthenticatedPlaceholder />}
-              />
-            </Route>
+              {/* Rotas protegidas — requer autenticação, usa MainLayout */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<MainLayout />}>
+                  <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+                  <Route
+                    path={ROUTES.PROJECTS}
+                    element={<PagePlaceholder name="Projetos" />}
+                  />
+                  <Route
+                    path={ROUTES.PROJECT_DETAIL}
+                    element={<PagePlaceholder name="Detalhes do Projeto" />}
+                  />
+                  <Route
+                    path={ROUTES.JOBS}
+                    element={<PagePlaceholder name="Jobs" />}
+                  />
+                  <Route
+                    path={ROUTES.JOB_DETAIL}
+                    element={<PagePlaceholder name="Detalhes do Job" />}
+                  />
+                  <Route
+                    path={ROUTES.EXECUTIONS}
+                    element={<PagePlaceholder name="Execuções" />}
+                  />
+                  <Route
+                    path={ROUTES.EXECUTION_DETAIL}
+                    element={<PagePlaceholder name="Detalhes da Execução" />}
+                  />
+                  <Route
+                    path={ROUTES.PROMPTS}
+                    element={<PagePlaceholder name="Templates de Prompt" />}
+                  />
+                  <Route
+                    path={ROUTES.SETTINGS}
+                    element={<PagePlaceholder name="Configurações" />}
+                  />
+                </Route>
+              </Route>
 
-            {/* Redirect da raiz para dashboard */}
-            <Route
-              path="/"
-              element={<Navigate to={ROUTES.DASHBOARD} replace />}
+              {/* Redirect da raiz para dashboard */}
+              <Route
+                path="/"
+                element={<Navigate to={ROUTES.DASHBOARD} replace />}
+              />
+
+              {/* Redirect de rotas desconhecidas para dashboard */}
+              <Route
+                path="*"
+                element={<Navigate to={ROUTES.DASHBOARD} replace />}
+              />
+            </Routes>
+
+            {/* Toaster para notificações toast (sonner) */}
+            <Toaster
+              theme="dark"
+              position="top-right"
+              richColors
+              toastOptions={{
+                style: {
+                  background: '#1A1D2E',
+                  border: '1px solid #2E3348',
+                  color: '#F9FAFB',
+                },
+              }}
             />
-
-            {/* Redirect de rotas desconhecidas para dashboard */}
-            <Route
-              path="*"
-              element={<Navigate to={ROUTES.DASHBOARD} replace />}
-            />
-          </Routes>
+          </TooltipProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

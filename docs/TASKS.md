@@ -258,7 +258,7 @@
 
 #### 3.1 Frontend — Layout Principal
 
-- [ ] **3.1.1** Criar `src/components/layout/Sidebar.tsx`
+- [X] **3.1.1** Criar `src/components/layout/Sidebar.tsx`
   - Sidebar fixa à esquerda com largura 256px (colapsada: 64px)
   - Logo AgentVision no topo com gradiente azul→roxo
   - Itens de navegação com ícones Lucide
@@ -268,13 +268,13 @@
   - Transição suave ao colapsar/expandir
   - Estado de colapsado persistido no localStorage
 
-- [ ] **3.1.2** Criar `src/components/layout/Header.tsx`
+- [X] **3.1.2** Criar `src/components/layout/Header.tsx`
   - Header fixo no topo da área de conteúdo
   - Título da página atual (dinâmico por rota)
   - Breadcrumb simples (opcional)
   - Área direita: nome do usuário, avatar placeholder
 
-- [ ] **3.1.3** Criar `src/components/layout/MainLayout.tsx`
+- [X] **3.1.3** Criar `src/components/layout/MainLayout.tsx`
   - Layout flex com Sidebar à esquerda
   - Área de conteúdo à direita com Header fixo e corpo scrollável
   - Outlet do React Router para renderizar páginas
@@ -282,7 +282,7 @@
 
 #### 3.2 Frontend — Componentes UI Base
 
-- [ ] **3.2.1** Configurar componentes shadcn/ui customizados
+- [X] **3.2.1** Configurar componentes shadcn/ui customizados
   - Button (variantes: primary, secondary, destructive, ghost)
   - Input (estilo dark com focus ring)
   - Textarea
@@ -296,13 +296,13 @@
   - Skeleton (loading)
   - Toast/Sonner (notificações)
 
-- [ ] **3.2.2** Criar `src/components/ui/StatusBadge.tsx`
+- [X] **3.2.2** Criar `src/components/ui/StatusBadge.tsx`
   - Componente reutilizável para badges de status
   - Props: status (success, error, running, pending, warning)
   - Mapeamento automático de cores e labels em português
   - Ícone animado para status "running" (Loader2 spin)
 
-- [ ] **3.2.3** Criar `src/components/ui/DataTable.tsx`
+- [X] **3.2.3** Criar `src/components/ui/DataTable.tsx`
   - Componente de tabela reutilizável
   - Props: columns, data, loading, pagination
   - Header com sort (opcional)
@@ -310,39 +310,39 @@
   - Empty state com mensagem
   - Paginação integrada (anterior/próximo, total de itens)
 
-- [ ] **3.2.4** Criar `src/components/ui/PageHeader.tsx`
+- [X] **3.2.4** Criar `src/components/ui/PageHeader.tsx`
   - Componente para cabeçalho de página
   - Props: title, description, action (botão)
   - Layout flex entre título e ação
 
-- [ ] **3.2.5** Criar `src/components/ui/ConfirmDialog.tsx`
+- [X] **3.2.5** Criar `src/components/ui/ConfirmDialog.tsx`
   - Modal de confirmação reutilizável
   - Props: title, description, confirmLabel, variant (danger/default), onConfirm
   - Botões: cancelar e confirmar
 
 #### 3.3 Backend — Endpoints do Dashboard
 
-- [ ] **3.3.1** Criar endpoint `GET /api/dashboard/summary`
+- [X] **3.3.1** Criar endpoint `GET /api/dashboard/summary`
   - Retorna contagens: projetos ativos, jobs ativos, jobs inativos
   - Contagem de execuções do dia (por status)
   - Taxa de sucesso (últimos 7 dias)
 
-- [ ] **3.3.2** Criar endpoint `GET /api/dashboard/recent-executions`
+- [X] **3.3.2** Criar endpoint `GET /api/dashboard/recent-executions`
   - Retorna últimas 10 execuções
   - Inclui nome do job, nome do projeto, status, timestamp, duração
 
-- [ ] **3.3.3** Criar endpoint `GET /api/dashboard/upcoming-executions`
+- [X] **3.3.3** Criar endpoint `GET /api/dashboard/upcoming-executions`
   - Retorna próximas 10 execuções agendadas
   - Calcula próximo disparo com base no cron de cada job ativo
   - Inclui nome do job, nome do projeto, próximo horário
 
-- [ ] **3.3.4** Criar endpoint `GET /api/dashboard/recent-failures`
+- [X] **3.3.4** Criar endpoint `GET /api/dashboard/recent-failures`
   - Retorna execuções com falha das últimas 24h
   - Inclui nome do job, projeto, timestamp, resumo do erro
 
 #### 3.4 Frontend — Página Dashboard
 
-- [ ] **3.4.1** Criar `src/pages/Dashboard.tsx`
+- [X] **3.4.1** Criar `src/pages/Dashboard.tsx`
   - Grid de cards de métricas no topo (projetos ativos, jobs ativos, execuções hoje, taxa de sucesso)
   - Cada card com ícone colorido, valor numérico e label
   - Seção "Últimas Execuções" com tabela compacta (job, projeto, status badge, horário, duração)
@@ -351,7 +351,7 @@
   - Loading states com skeleton
   - Auto-refresh a cada 30 segundos
 
-- [ ] **3.4.2** Criar `src/hooks/useDashboard.ts`
+- [X] **3.4.2** Criar `src/hooks/useDashboard.ts`
   - Hook com React Query para buscar dados do dashboard
   - Queries separadas para summary, recent-executions, upcoming, failures
   - Configurar staleTime e refetchInterval
