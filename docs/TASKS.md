@@ -746,7 +746,7 @@
 
 #### 8.1 Backend — Módulo Agents (LLM Provider)
 
-- [ ] **8.1.1** Criar `modules/agents/llm_provider.py` com Strategy/Factory
+- [X] **8.1.1** Criar `modules/agents/llm_provider.py` com Strategy/Factory
   - Classe abstrata `BaseLLMProvider` com método abstrato `analyze_image(image_data, prompt) → AnalysisResult`
   - Classe `AnalysisResult` (text, extracted_data, tokens_used)
   - Implementação `AnthropicProvider` usando SDK anthropic (Claude Vision)
@@ -755,7 +755,7 @@
   - Implementação `OllamaProvider` usando HTTP requests para API local do Ollama
   - Factory function `get_llm_provider(provider_name, api_key, model, params) → BaseLLMProvider`
 
-- [ ] **8.1.2** Criar `modules/agents/screenshot_manager.py`
+- [X] **8.1.2** Criar `modules/agents/screenshot_manager.py`
   - Classe `ScreenshotManager`
   - Método `save_screenshot(image_bytes, execution_id, index) → str` (retorna path no MinIO)
   - Método `get_screenshot_urls(execution_id) → list[str]` (URLs presigned)
@@ -763,7 +763,7 @@
 
 #### 8.2 Backend — Módulo Agents (Browser Agent)
 
-- [ ] **8.2.1** Criar `modules/agents/browser_agent.py` com agente de navegação
+- [X] **8.2.1** Criar `modules/agents/browser_agent.py` com agente de navegação
   - Classe `BrowserAgent`
   - Inicialização com configurações do projeto (URL, credentials)
   - Método `run(prompt, execution_params) → BrowserResult`

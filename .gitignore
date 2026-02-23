@@ -8,7 +8,7 @@ build/
 .venv/
 venv/
 env/
-agents/
+/agents/
 claude.md
 
 # Node
