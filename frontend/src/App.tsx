@@ -13,19 +13,9 @@ import Jobs from '@/pages/Jobs';
 import JobDetail from '@/pages/JobDetail';
 import Executions from '@/pages/Executions';
 import ExecutionDetail from '@/pages/ExecutionDetail';
+import PromptTemplates from '@/pages/PromptTemplates';
+import Settings from '@/pages/Settings';
 import { ROUTES } from '@/utils/constants';
-
-// Placeholder temporário para páginas ainda não implementadas
-function PagePlaceholder({ name }: { name: string }) {
-  return (
-    <div className="flex items-center justify-center py-20">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-[#F9FAFB]">{name}</h2>
-        <p className="mt-2 text-sm text-[#9CA3AF]">Página em construção</p>
-      </div>
-    </div>
-  );
-}
 
 // Configuração do QueryClient com defaults
 const queryClient = new QueryClient({
@@ -87,11 +77,11 @@ function App() {
                   />
                   <Route
                     path={ROUTES.PROMPTS}
-                    element={<PagePlaceholder name="Templates de Prompt" />}
+                    element={<PromptTemplates />}
                   />
                   <Route
                     path={ROUTES.SETTINGS}
-                    element={<PagePlaceholder name="Configurações" />}
+                    element={<Settings />}
                   />
                 </Route>
               </Route>

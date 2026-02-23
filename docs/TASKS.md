@@ -657,25 +657,25 @@
 
 #### 7.1 Backend — Módulo Prompts
 
-- [ ] **7.1.1** Criar `modules/prompts/models.py` com modelo PromptTemplate
+- [X] **7.1.1** Criar `modules/prompts/models.py` com modelo PromptTemplate
   - Campos: id, name, content, description, category, version (int, default 1)
   - Herdar de SoftDeleteModel
 
-- [ ] **7.1.2** Criar `modules/prompts/schemas.py` com schemas
+- [X] **7.1.2** Criar `modules/prompts/schemas.py` com schemas
   - PromptTemplateCreate (name, content, description, category)
   - PromptTemplateUpdate (content, description, category — incrementa versão)
   - PromptTemplateResponse
   - PromptTemplateListResponse (paginado)
 
-- [ ] **7.1.3** Criar `modules/prompts/repository.py` com PromptTemplateRepository
+- [X] **7.1.3** Criar `modules/prompts/repository.py` com PromptTemplateRepository
   - CRUD padrão com paginação e filtros
   - get_versions(id) → histórico de versões (se implementado como tabela separada ou campo versionado)
 
-- [ ] **7.1.4** Criar `modules/prompts/service.py` com PromptTemplateService
+- [X] **7.1.4** Criar `modules/prompts/service.py` com PromptTemplateService
   - CRUD com lógica de versionamento (incrementar version ao atualizar)
   - Listagem com filtros por categoria e nome
 
-- [ ] **7.1.5** Criar `modules/prompts/router.py` com endpoints
+- [X] **7.1.5** Criar `modules/prompts/router.py` com endpoints
   - GET /api/prompts — listar templates (paginado, filtros)
   - GET /api/prompts/:id — detalhe
   - POST /api/prompts — criar
@@ -683,59 +683,59 @@
   - DELETE /api/prompts/:id — soft delete
   - Todos requerem autenticação
 
-- [ ] **7.1.6** Gerar migração Alembic para tabela prompt_templates
+- [X] **7.1.6** Gerar migração Alembic para tabela prompt_templates
   - `alembic revision --autogenerate -m "create_prompt_templates_table"`
   - Revisar e executar migração
 
 #### 7.2 Backend — Módulo Settings
 
-- [ ] **7.2.1** Criar `modules/settings/models.py` com modelo Setting
+- [X] **7.2.1** Criar `modules/settings/models.py` com modelo Setting
   - Campos: id, key (unique), encrypted_value, category, description
   - Herdar de BaseModel (sem soft delete)
   - Categorias: smtp, general
 
-- [ ] **7.2.2** Criar `modules/settings/schemas.py` com schemas
+- [X] **7.2.2** Criar `modules/settings/schemas.py` com schemas
   - SettingCreate (key, value, category, description)
   - SettingUpdate (value)
   - SettingResponse (key, category, description — valor descriptografado apenas quando necessário)
   - SMTPConfigSchema (host, port, username, password, use_tls, sender_email)
 
-- [ ] **7.2.3** Criar `modules/settings/repository.py` com SettingRepository
+- [X] **7.2.3** Criar `modules/settings/repository.py` com SettingRepository
   - get_by_key(key) → Setting | None
   - get_by_category(category) → lista de Settings
   - upsert(key, value, category, description) → Setting
 
-- [ ] **7.2.4** Criar `modules/settings/service.py` com SettingService
+- [X] **7.2.4** Criar `modules/settings/service.py` com SettingService
   - get_settings(category) → dict de configurações
   - update_settings(category, data) → dict
   - get_smtp_config() → SMTPConfig
   - test_smtp_connection(config) → bool
 
-- [ ] **7.2.5** Criar `modules/settings/router.py` com endpoints
+- [X] **7.2.5** Criar `modules/settings/router.py` com endpoints
   - GET /api/settings/:category — obter configurações por categoria
   - PUT /api/settings/:category — atualizar configurações
   - POST /api/settings/smtp/test — testar conexão SMTP
   - Todos requerem autenticação
 
-- [ ] **7.2.6** Gerar migração Alembic para tabela settings
+- [X] **7.2.6** Gerar migração Alembic para tabela settings
   - `alembic revision --autogenerate -m "create_settings_table"`
   - Revisar e executar migração
 
 #### 7.3 Frontend — Prompt Templates e Settings
 
-- [ ] **7.3.1** Criar `src/pages/PromptTemplates.tsx`
+- [X] **7.3.1** Criar `src/pages/PromptTemplates.tsx`
   - Listagem de templates com filtros por nome e categoria
   - Modal de criação/edição com campos: nome, categoria, descrição, conteúdo (textarea grande)
   - Indicador de versão atual
   - Ações: editar, excluir
 
-- [ ] **7.3.2** Criar `src/pages/Settings.tsx`
+- [X] **7.3.2** Criar `src/pages/Settings.tsx`
   - Seção SMTP: host, porta, usuário, senha, TLS toggle, email remetente
   - Botão "Testar Conexão" com feedback visual (loading → sucesso/erro)
   - Botão "Salvar" para persistir configurações
   - Campos sensíveis mascarados
 
-- [ ] **7.3.3** Criar `src/services/settings.ts` com serviço de API
+- [X] **7.3.3** Criar `src/services/settings.ts` com serviço de API
   - getSettings(category) → Settings
   - updateSettings(category, data) → Settings
   - testSmtp() → boolean

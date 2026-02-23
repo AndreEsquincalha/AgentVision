@@ -211,3 +211,25 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: 'agentvision_refresh_token',
   SIDEBAR_COLLAPSED: 'agentvision_sidebar_collapsed',
 } as const;
+
+// =============================================
+// Categorias de Prompt Templates
+// =============================================
+
+export const PROMPT_CATEGORIES = [
+  { value: 'extraction', label: 'Extração de Dados' },
+  { value: 'analysis', label: 'Análise Visual' },
+  { value: 'navigation', label: 'Navegação' },
+  { value: 'report', label: 'Relatório' },
+  { value: 'validation', label: 'Validação' },
+  { value: 'general', label: 'Geral' },
+] as const;
+
+/**
+ * Retorna o label em pt-BR de uma categoria de prompt.
+ */
+export function getPromptCategoryLabel(category: string | null | undefined): string {
+  if (!category) return '-';
+  const found = PROMPT_CATEGORIES.find((c) => c.value === category);
+  return found?.label ?? category;
+}
