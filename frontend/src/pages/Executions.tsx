@@ -2,16 +2,18 @@ import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Eye,
+  Trash2,
   Filter,
   History,
 } from 'lucide-react';
-import { useExecutions } from '@/hooks/useExecutions';
+import { useExecutions, useDeleteExecution } from '@/hooks/useExecutions';
 import { useProjects } from '@/hooks/useProjects';
 import { useJobs } from '@/hooks/useJobs';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import type { ColumnDef } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -46,6 +48,10 @@ export default function Executions() {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
 
+  // --- Estado de dialog de exclusao ---
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [executionToDelete, setExecutionToDelete] = useState<Execution | null>(null);
+
   // --- Controle de visibilidade dos filtros avancados ---
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -67,6 +73,7 @@ export default function Executions() {
   );
 
   const { data, isPending } = useExecutions(queryParams);
+  const deleteMutation = useDeleteExecution();
 
   // Busca projetos e jobs para os selects de filtro
   const { data: projectsData } = useProjects({ per_page: 100 });
@@ -148,6 +155,23 @@ export default function Executions() {
     },
     [navigate]
   );
+
+  const handleDeleteClick = useCallback((execution: Execution) => {
+    setExecutionToDelete(execution);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (executionToDelete) {
+      try {
+        await deleteMutation.mutateAsync(executionToDelete.id);
+        setDeleteDialogOpen(false);
+        setExecutionToDelete(null);
+      } catch {
+        // Erro tratado pelo hook (toast)
+      }
+    }
+  }, [executionToDelete, deleteMutation]);
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
@@ -237,7 +261,7 @@ export default function Executions() {
         id: 'actions',
         header: '',
         cell: (row) => (
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -255,13 +279,31 @@ export default function Executions() {
               </TooltipTrigger>
               <TooltipContent>Ver detalhes</TooltipContent>
             </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClick(row);
+                  }}
+                  className="text-[#9CA3AF] hover:bg-[#EF4444]/10 hover:text-[#EF4444]"
+                  aria-label={`Excluir execução ${row.job_name ?? row.id}`}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Excluir</TooltipContent>
+            </Tooltip>
           </div>
         ),
-        className: 'w-16',
+        className: 'w-24',
         headerClassName: 'text-right',
       },
     ],
-    [handleViewExecution]
+    [handleViewExecution, handleDeleteClick]
   );
 
   // --- Dados de paginacao ---
@@ -468,6 +510,18 @@ export default function Executions() {
         emptyIcon={History}
         emptyMessage="Nenhuma execução encontrada"
         emptyDescription="As execuções dos seus jobs aparecerão aqui automaticamente quando forem executados. Configure um job com agendamento ou execute um dry run."
+      />
+
+      {/* Dialog de confirmacao de exclusao */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Excluir Execução"
+        description="Tem certeza que deseja excluir esta execução? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        loading={deleteMutation.isPending}
       />
     </div>
   );

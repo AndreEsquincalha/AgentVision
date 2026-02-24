@@ -248,11 +248,30 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         # -----------------------------------------------------------------
         # 7. Analisa screenshots com VisionAnalyzer (LLM)
         # -----------------------------------------------------------------
+        # Envia ate 3 screenshots (deduplicados) para o LLM analisar.
+        # A analise e um texto coeso sobre o que o LLM observa no site,
+        # respondendo ao prompt do agente de forma analitica.
         extracted_data: dict | None = None
         analysis_text: str = ''
 
         if screenshots and llm_config.get('api_key'):
-            all_logs.append('Iniciando analise visual com LLM...')
+            # Seleciona ate 3 screenshots para analise (primeiro, meio, ultimo)
+            max_analysis_screenshots = 3
+            if len(screenshots) <= max_analysis_screenshots:
+                analysis_screenshots = screenshots
+            else:
+                # Pega primeiro, um do meio e ultimo para cobrir a navegacao
+                mid_idx = len(screenshots) // 2
+                analysis_screenshots = [
+                    screenshots[0],
+                    screenshots[mid_idx],
+                    screenshots[-1],
+                ]
+
+            all_logs.append(
+                f'Iniciando analise visual com LLM '
+                f'({len(analysis_screenshots)} de {len(screenshots)} screenshots)...'
+            )
 
             from app.modules.agents.vision_analyzer import VisionAnalyzer
 
@@ -267,7 +286,7 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                 }
 
                 analysis_result = analyzer.analyze(
-                    screenshots=screenshots,
+                    screenshots=analysis_screenshots,
                     prompt=prompt,
                     metadata=analysis_metadata,
                 )

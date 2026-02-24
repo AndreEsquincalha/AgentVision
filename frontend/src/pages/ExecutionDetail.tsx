@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
   ArrowLeft,
+  Trash2,
   XCircle,
   History,
   Image,
@@ -18,10 +19,11 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { useExecution, useScreenshots, usePdfUrl, useRetryDelivery } from '@/hooks/useExecutions';
+import { useExecution, useScreenshots, usePdfUrl, useRetryDelivery, useDeleteExecution } from '@/hooks/useExecutions';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
 import type { ColumnDef } from '@/components/ui/DataTable';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -57,20 +59,38 @@ export default function ExecutionDetail() {
   const [jsonExpanded, setJsonExpanded] = useState(false);
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [retryingDeliveryId, setRetryingDeliveryId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // --- Queries ---
   const { data: execution, isPending, isError } = useExecution(id ?? '');
   const { data: screenshots, isPending: screenshotsLoading } = useScreenshots(id ?? '');
   const { data: pdfUrl } = usePdfUrl(id ?? '');
 
-  // --- Mutation ---
+  // --- Mutations ---
   const retryMutation = useRetryDelivery();
+  const deleteMutation = useDeleteExecution();
 
   // --- Handlers ---
 
   const handleBack = useCallback(() => {
     navigate(ROUTES.EXECUTIONS);
   }, [navigate]);
+
+  const handleDeleteClick = useCallback(() => {
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (execution) {
+      try {
+        await deleteMutation.mutateAsync(execution.id);
+        setDeleteDialogOpen(false);
+        navigate(ROUTES.EXECUTIONS);
+      } catch {
+        // Erro tratado pelo hook (toast)
+      }
+    }
+  }, [execution, deleteMutation, navigate]);
 
   const handleOpenLightbox = useCallback((index: number) => {
     setLightboxIndex(index);
@@ -287,6 +307,19 @@ export default function ExecutionDetail() {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeleteClick}
+            className="border-[#2E3348] bg-transparent text-[#EF4444] hover:bg-[#EF4444]/10 hover:text-[#EF4444]"
+            aria-label="Excluir execução"
+          >
+            <Trash2 className="size-4" />
+            Excluir
+          </Button>
         </div>
       </div>
 
@@ -633,6 +666,18 @@ export default function ExecutionDetail() {
           />
         )}
       </div>
+
+      {/* Dialog de confirmacao de exclusao */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Excluir Execução"
+        description="Tem certeza que deseja excluir esta execução? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

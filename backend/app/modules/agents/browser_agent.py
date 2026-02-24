@@ -12,6 +12,7 @@ class BrowserResult:
 
     screenshots: list[bytes] = field(default_factory=list)
     logs: list[str] = field(default_factory=list)
+    extracted_content: list[str] = field(default_factory=list)
     success: bool = False
     error_message: str | None = None
 
@@ -32,6 +33,7 @@ class BrowserAgent:
         credentials: dict | None = None,
         headless: bool = True,
         timeout: int = 120,
+        timeout_per_step: int = 60,
     ) -> None:
         """
         Inicializa o agente de navegacao.
@@ -40,12 +42,14 @@ class BrowserAgent:
             base_url: URL base do site a ser navegado.
             credentials: Dicionario com credenciais de login (ex: {username: '...', password: '...'}).
             headless: Se True, executa o navegador em modo headless (sem interface grafica).
-            timeout: Timeout em segundos para a execucao completa.
+            timeout: Timeout base em segundos (usado no fallback Playwright).
+            timeout_per_step: Timeout maximo por step do agente (segundos).
         """
         self._base_url = base_url
         self._credentials = credentials
         self._headless = headless
         self._timeout = timeout
+        self._timeout_per_step = timeout_per_step
 
     async def run(
         self,
@@ -145,10 +149,15 @@ class BrowserAgent:
                 max_steps=execution_params.get('max_steps', 20),
             )
 
-            # Executa com timeout
+            # Timeout inteligente: max_steps * timeout_per_step
+            # Permite que o agente trabalhe sem ser cortado enquanto progride
+            max_steps = execution_params.get('max_steps', 20)
+            smart_timeout = float(max_steps * self._timeout_per_step)
+            logs.append(f'Timeout: {smart_timeout:.0f}s ({max_steps} steps x {self._timeout_per_step}s/step)')
+
             history = await asyncio.wait_for(
                 agent.run(),
-                timeout=float(self._timeout),
+                timeout=smart_timeout,
             )
 
             # Extrai screenshots do historico
@@ -169,12 +178,39 @@ class BrowserAgent:
                 for url in visited_urls:
                     logs.append(f'URL visitada: {url}')
 
-            # Extrai conteudo extraido
+            # Extrai conteudo extraido via acao "extract" durante a navegacao
+            extracted_content: list[str] = []
             extracted = history.extracted_content()
             if extracted:
                 for content in extracted:
                     if content:
-                        logs.append(f'Conteudo extraido: {str(content)[:200]}')
+                        content_str = str(content).strip()
+                        if content_str:
+                            extracted_content.append(content_str)
+                            logs.append(f'Conteudo extraido: {content_str[:200]}')
+
+            # Resultado final do agente
+            final = history.final_result()
+            if final:
+                final_str = str(final).strip()
+                if final_str:
+                    extracted_content.append(final_str)
+                    logs.append(f'Resultado final: {final_str[:200]}')
+
+            # Deduplica screenshots (remove prints identicos)
+            if len(screenshots) > 1:
+                unique_screenshots: list[bytes] = []
+                seen_hashes: set[int] = set()
+                for img in screenshots:
+                    img_hash = hash(img)
+                    if img_hash not in seen_hashes:
+                        seen_hashes.add(img_hash)
+                        unique_screenshots.append(img)
+                if len(unique_screenshots) < len(screenshots):
+                    logs.append(
+                        f'Screenshots deduplicados: {len(screenshots)} -> {len(unique_screenshots)}'
+                    )
+                    screenshots = unique_screenshots
 
             # Extrai erros
             errors = history.errors()
@@ -194,12 +230,15 @@ class BrowserAgent:
             return BrowserResult(
                 screenshots=screenshots,
                 logs=logs,
+                extracted_content=extracted_content,
                 success=is_done and not has_errors,
                 error_message=None if not has_errors else 'Erros encontrados durante navegacao',
             )
 
         except asyncio.TimeoutError:
-            logs.append(f'Timeout atingido ({self._timeout}s). Capturando screenshot final.')
+            max_steps = execution_params.get('max_steps', 20)
+            smart_timeout = max_steps * self._timeout_per_step
+            logs.append(f'Timeout atingido ({smart_timeout}s). Capturando screenshot final.')
             # Tenta capturar screenshot final em caso de timeout
             try:
                 if browser:
@@ -219,7 +258,7 @@ class BrowserAgent:
                 screenshots=screenshots,
                 logs=logs,
                 success=False,
-                error_message=f'Timeout atingido ({self._timeout}s)',
+                error_message=f'Timeout atingido ({smart_timeout}s)',
             )
 
         except Exception as e:
@@ -238,7 +277,7 @@ class BrowserAgent:
             # Limpeza do navegador
             if browser:
                 try:
-                    await browser.close()
+                    await browser.stop()
                     logs.append('Navegador fechado com sucesso')
                 except Exception as close_err:
                     logger.warning('Erro ao fechar navegador: %s', str(close_err))
@@ -624,10 +663,21 @@ class BrowserAgent:
         # Prompt principal
         parts.append(f'Instrucoes: {prompt}')
 
-        # Instrucao para capturar screenshots
+        # Instrucao para capturar screenshots e extrair conteudo
         parts.append(
             'Capture screenshots nos momentos relevantes (apos carregar paginas, '
-            'apos interacoes importantes, e quando encontrar informacoes relevantes).'
+            'apos interacoes importantes, e quando encontrar informacoes relevantes). '
+            'Enquanto navega, use a acao "extract" para extrair e registrar sua analise '
+            'do que voce esta vendo: descreva o conteudo visual, informacoes encontradas, '
+            'observacoes importantes e insights. Essa analise sera usada no relatorio final.'
+        )
+
+        # Instrucao de finalizacao — evita que o agente fique em loop apos completar a tarefa
+        parts.append(
+            'IMPORTANTE: Quando voce tiver concluido todas as instrucoes acima e '
+            'capturado os screenshots necessarios, pare imediatamente. '
+            'Nao continue navegando, nao explore outras secoes do site, '
+            'nao repita acoes ja concluidas. Sinalize que a tarefa foi concluida com done.'
         )
 
         return ' '.join(parts)

@@ -318,6 +318,7 @@ const ProjectForm = memo(function ProjectForm({
                 </Label>
                 <Input
                   id="credentials_username"
+                  autoComplete="off"
                   placeholder={
                     isEditing && project?.has_credentials
                       ? '••••••••'
@@ -339,6 +340,7 @@ const ProjectForm = memo(function ProjectForm({
                 <Input
                   id="credentials_password"
                   type="password"
+                  autoComplete="new-password"
                   placeholder={
                     isEditing && project?.has_credentials
                       ? '••••••••'

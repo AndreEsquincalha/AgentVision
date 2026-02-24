@@ -307,7 +307,7 @@ class OpenAIProvider(BaseLLMProvider):
                     'type': 'image_url',
                     'image_url': {
                         'url': data_url,
-                        'detail': 'high',
+                        'detail': 'auto',
                     },
                 })
 

@@ -19,6 +19,7 @@ from app.modules.executions.schemas import (
     ScreenshotUrlResponse,
 )
 from app.modules.executions.service import ExecutionService
+from app.shared.schemas import MessageResponse
 from app.shared.storage import StorageClient
 
 router = APIRouter(
@@ -110,6 +111,25 @@ def get_execution(
     Inclui logs de execucao, dados extraidos, e logs de entrega associados.
     """
     return service.get_execution(execution_id)
+
+
+@router.delete('/{execution_id}', response_model=MessageResponse)
+def delete_execution(
+    execution_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    service: ExecutionService = Depends(get_execution_service),
+) -> MessageResponse:
+    """
+    Exclui uma execucao e todos os seus artefatos associados.
+
+    Remove screenshots e PDF do storage, delivery logs do banco,
+    e a execucao em si. A exclusao e permanente (hard delete).
+    """
+    service.delete_execution(execution_id)
+    return MessageResponse(
+        success=True,
+        message='Execucao excluida com sucesso',
+    )
 
 
 @router.get('/{execution_id}/screenshots', response_model=ScreenshotUrlResponse)

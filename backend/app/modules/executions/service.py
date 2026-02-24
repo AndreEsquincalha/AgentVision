@@ -230,6 +230,61 @@ class ExecutionService:
         execution = self._repository.create(execution_data)
         return execution
 
+    def delete_execution(self, execution_id: uuid.UUID) -> None:
+        """
+        Exclui uma execucao e seus artefatos associados.
+
+        Remove screenshots e PDF do MinIO (se existirem),
+        deleta os delivery logs vinculados e a execucao do banco.
+
+        Args:
+            execution_id: ID da execucao a ser excluida.
+
+        Raises:
+            NotFoundException: Se a execucao nao for encontrada.
+        """
+        execution = self._repository.get_by_id(execution_id)
+        if not execution:
+            raise NotFoundException('Execucao nao encontrada')
+
+        # Remove screenshots do MinIO (se existirem)
+        if execution.screenshots_path:
+            try:
+                files = self._storage.list_files(
+                    prefix=execution.screenshots_path,
+                )
+                for file_key in files:
+                    self._storage.delete_file(key=file_key)
+                logger.info(
+                    'Screenshots removidos do storage para execucao %s',
+                    execution_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    'Erro ao remover screenshots da execucao %s: %s',
+                    execution_id,
+                    str(e),
+                )
+
+        # Remove PDF do MinIO (se existir)
+        if execution.pdf_path:
+            try:
+                self._storage.delete_file(key=execution.pdf_path)
+                logger.info(
+                    'PDF removido do storage para execucao %s',
+                    execution_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    'Erro ao remover PDF da execucao %s: %s',
+                    execution_id,
+                    str(e),
+                )
+
+        # Deleta a execucao e delivery logs do banco
+        self._repository.delete(execution_id)
+        logger.info('Execucao %s excluida com sucesso', execution_id)
+
     def retry_delivery(
         self,
         execution_id: uuid.UUID,

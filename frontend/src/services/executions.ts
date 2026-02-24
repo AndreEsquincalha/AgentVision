@@ -72,6 +72,13 @@ export async function getPdfUrl(id: string): Promise<string> {
 }
 
 /**
+ * Remove uma execucao (soft delete).
+ */
+export async function deleteExecution(id: string): Promise<void> {
+  await api.delete(API_ENDPOINTS.EXECUTIONS.DETAIL(id));
+}
+
+/**
  * Reenvia a entrega de uma execucao que falhou.
  */
 export async function retryDelivery(

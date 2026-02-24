@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.modules.delivery.models import DeliveryLog
 from app.modules.executions.models import Execution
 from app.modules.jobs.models import Job
 
@@ -144,6 +145,37 @@ class ExecutionRepository:
         self._db.commit()
         self._db.refresh(execution)
         return execution
+
+    def delete(self, execution_id: uuid.UUID) -> bool:
+        """
+        Exclui permanentemente uma execucao e seus delivery logs associados.
+
+        Execucoes usam BaseModel (sem soft delete), portanto a exclusao
+        e definitiva. Os DeliveryLogs vinculados sao removidos antes
+        da execucao para manter integridade referencial.
+
+        Args:
+            execution_id: ID (UUID) da execucao a ser excluida.
+
+        Returns:
+            True se a execucao foi encontrada e excluida, False caso contrario.
+        """
+        # Verifica se a execucao existe
+        stmt = select(Execution).where(Execution.id == execution_id)
+        execution = self._db.execute(stmt).scalar_one_or_none()
+        if not execution:
+            return False
+
+        # Remove delivery logs associados
+        delete_logs_stmt = sa_delete(DeliveryLog).where(
+            DeliveryLog.execution_id == execution_id,
+        )
+        self._db.execute(delete_logs_stmt)
+
+        # Remove a execucao
+        self._db.delete(execution)
+        self._db.commit()
+        return True
 
     def update_status(
         self,

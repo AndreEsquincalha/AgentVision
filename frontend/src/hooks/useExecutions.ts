@@ -69,6 +69,28 @@ export function usePdfUrl(id: string) {
 }
 
 /**
+ * Hook de mutation para excluir uma execucao.
+ * Invalida a lista de execucoes e o dashboard apos sucesso.
+ */
+export function useDeleteExecution() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: (id: string) => executionsService.deleteExecution(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: EXECUTION_KEYS.lists() }),
+        queryClient.invalidateQueries({ queryKey: DASHBOARD_KEYS.all }),
+      ]);
+      toast.success('Execução excluída com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao excluir execução.');
+    },
+  });
+}
+
+/**
  * Hook de mutation para reenviar uma entrega que falhou.
  * Invalida o detalhe da execucao e o dashboard apos sucesso.
  */
