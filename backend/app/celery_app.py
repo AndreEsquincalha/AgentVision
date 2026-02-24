@@ -32,6 +32,18 @@ celery_app.conf.update(
     task_routes={
         'app.modules.jobs.tasks.*': {'queue': 'default'},
     },
+
+    # Celery Beat: agendamento periodico
+    # A task check_and_dispatch_jobs roda a cada minuto e verifica
+    # quais jobs ativos devem ser disparados com base em seus crons.
+    # Isso permite agendamento dinamico sem necessidade de RedBeat
+    # ou DatabaseScheduler — basta ativar/desativar jobs no banco.
+    beat_schedule={
+        'check-and-dispatch-jobs-every-minute': {
+            'task': 'app.modules.jobs.tasks.check_and_dispatch_jobs',
+            'schedule': 60.0,  # a cada 60 segundos
+        },
+    },
 )
 
 # Autodiscover de tasks em todos os modulos

@@ -246,9 +246,9 @@ class JobService:
         """
         Inicia um dry run para um job.
 
-        Por enquanto, apenas retorna um schema indicando que o dry run foi iniciado.
-        A criacao do registro de Execution sera implementada no Sprint 6 quando
-        o modelo Execution estiver disponivel.
+        Despacha a task Celery execute_job com is_dry_run=True.
+        O dry run executa todo o fluxo (navegacao, screenshots, analise, PDF)
+        porem nao realiza a etapa de entrega.
 
         Args:
             job_id: ID do job para executar o dry run.
@@ -269,12 +269,9 @@ class JobService:
                 'Nao e possivel executar dry run de um job inativo'
             )
 
-        # TODO: Criar registro de Execution quando o modelo estiver disponivel
-        # execution = Execution(
-        #     job_id=job.id,
-        #     status='pending',
-        #     is_dry_run=True,
-        # )
+        # Despacha a task Celery para execucao assincrona
+        from app.modules.jobs.tasks import execute_job
+        execute_job.delay(str(job.id), True)
 
         return DryRunResponse(
             job_id=job.id,

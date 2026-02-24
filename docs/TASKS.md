@@ -775,7 +775,7 @@
 
 #### 8.3 Backend — Módulo Agents (Vision Analyzer)
 
-- [ ] **8.3.1** Criar `modules/agents/vision_analyzer.py` com analisador visual
+- [X] **8.3.1** Criar `modules/agents/vision_analyzer.py` com analisador visual
   - Classe `VisionAnalyzer`
   - Inicialização com LLM provider do projeto
   - Método `analyze(screenshots, prompt) → AnalysisResult`
@@ -785,27 +785,27 @@
 
 #### 8.4 Backend — Módulo Agents (PDF Generator)
 
-- [ ] **8.4.1** Criar `modules/agents/pdf_generator.py` com gerador de PDF
+- [X] **8.4.1** Criar `modules/agents/pdf_generator.py` com gerador de PDF
   - Classe `PDFGenerator`
   - Método `generate(screenshots, analysis, metadata) → bytes`
   - Layout profissional: capa com título e data, screenshots com legendas, seção de análise, seção de dados extraídos, seção de insights
   - Usar ReportLab ou WeasyPrint
   - Retorno: PDF em bytes
 
-- [ ] **8.4.2** Integrar geração de PDF com armazenamento no MinIO
+- [X] **8.4.2** Integrar geração de PDF com armazenamento no MinIO
   - Salvar PDF no MinIO com path: `pdfs/{execution_id}/report.pdf`
   - Atualizar campo pdf_path da Execution
 
 #### 8.5 Backend — Celery Tasks
 
-- [ ] **8.5.1** Criar `modules/jobs/tasks.py` com task principal
+- [X] **8.5.1** Criar `modules/jobs/tasks.py` com task principal
   - Task `execute_job(job_id, is_dry_run=False)`
   - Fluxo: criar Execution → iniciar agente → capturar screenshots → salvar no MinIO → analisar com LLM → gerar PDF → salvar PDF → entregar → atualizar Execution
   - Tratamento de erros em cada etapa com logging
   - Atualizar status da Execution ao longo do processo
   - Se dry_run, pular etapa de entrega
 
-- [ ] **8.5.2** Configurar Celery Beat para agendamento dinâmico
+- [X] **8.5.2** Configurar Celery Beat para agendamento dinâmico
   - Usar DatabaseScheduler ou RedBeat para agendamento dinâmico
   - Sincronizar cron de jobs ativos com o Celery Beat
   - Ao ativar/desativar job, atualizar agendamento
