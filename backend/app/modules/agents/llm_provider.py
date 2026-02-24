@@ -152,6 +152,9 @@ class AnthropicProvider(BaseLLMProvider):
     e obter analise visual via modelos Claude.
     """
 
+    # Limite maximo de output tokens para modelos Anthropic (64k para Sonnet/Opus)
+    _MAX_OUTPUT_TOKENS = 64000
+
     def __init__(
         self,
         api_key: str,
@@ -160,6 +163,8 @@ class AnthropicProvider(BaseLLMProvider):
         max_tokens: int = 4096,
         timeout: int = 120,
     ) -> None:
+        # Garante que max_tokens nao exceda o limite do provider
+        max_tokens = min(max_tokens, self._MAX_OUTPUT_TOKENS)
         super().__init__(api_key, model, temperature, max_tokens, timeout)
         try:
             from anthropic import Anthropic
@@ -260,6 +265,8 @@ class OpenAIProvider(BaseLLMProvider):
     e obter analise visual via modelos GPT-4o.
     """
 
+    _MAX_OUTPUT_TOKENS = 64000
+
     def __init__(
         self,
         api_key: str,
@@ -268,6 +275,7 @@ class OpenAIProvider(BaseLLMProvider):
         max_tokens: int = 4096,
         timeout: int = 120,
     ) -> None:
+        max_tokens = min(max_tokens, self._MAX_OUTPUT_TOKENS)
         super().__init__(api_key, model, temperature, max_tokens, timeout)
         try:
             from openai import OpenAI

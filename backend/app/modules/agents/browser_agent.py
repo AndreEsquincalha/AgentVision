@@ -707,15 +707,15 @@ class BrowserAgent:
 
         if provider == 'openai':
             try:
-                from langchain_openai import ChatOpenAI
+                # Usa o ChatOpenAI do browser-use que inclui o atributo 'provider'
+                from browser_use import ChatOpenAI
                 return ChatOpenAI(
                     model=model,
                     api_key=api_key,
                     temperature=temperature,
                 )
             except ImportError:
-                # Fallback: tenta usar ChatOpenAI do browser-use
-                from browser_use import ChatOpenAI
+                from langchain_openai import ChatOpenAI
                 return ChatOpenAI(
                     model=model,
                     api_key=api_key,
@@ -724,16 +724,20 @@ class BrowserAgent:
 
         elif provider == 'anthropic':
             try:
-                from langchain_anthropic import ChatAnthropic
+                # Usa o ChatAnthropic do browser-use que inclui o atributo 'provider'
+                from browser_use import ChatAnthropic
                 return ChatAnthropic(
                     model=model,
                     api_key=api_key,
                     temperature=temperature,
                 )
             except ImportError:
-                raise ImportError(
-                    'O pacote "langchain-anthropic" e necessario para usar Anthropic com browser-use. '
-                    'Instale com: pip install langchain-anthropic'
+                # Fallback para langchain_anthropic
+                from langchain_anthropic import ChatAnthropic
+                return ChatAnthropic(
+                    model=model,
+                    api_key=api_key,
+                    temperature=temperature,
                 )
 
         elif provider == 'google':
