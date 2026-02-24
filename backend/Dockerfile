@@ -2,7 +2,8 @@ FROM python:3.13-slim
 
 # Variáveis de ambiente para Python
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 # Diretório de trabalho
 WORKDIR /app

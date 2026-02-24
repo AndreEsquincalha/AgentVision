@@ -1,17 +1,14 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
 from app.modules.auth.schemas import TokenResponse, UserResponse
 from app.shared.exceptions import UnauthorizedException
-
-# Contexto de hashing de senhas com bcrypt
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 
 def hash_password(password: str) -> str:
@@ -24,7 +21,9 @@ def hash_password(password: str) -> str:
     Returns:
         Hash bcrypt da senha.
     """
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(
+        password.encode('utf-8'), bcrypt.gensalt()
+    ).decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -38,7 +37,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True se a senha corresponde ao hash.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(
+        plain_password.encode('utf-8'),
+        hashed_password.encode('utf-8'),
+    )
 
 
 def create_access_token(subject: str) -> str:

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import * as settingsService from '@/services/settings';
-import type { Setting, SMTPConfig } from '@/types';
+import type { SMTPConfig } from '@/types';
 
 // --- Query keys ---
 
@@ -14,9 +14,10 @@ const SETTINGS_KEYS = {
 
 /**
  * Hook para buscar as configurações de uma categoria específica.
+ * Retorna um dicionário chave-valor.
  */
 export function useSettings(category: string) {
-  return useQuery<Setting[]>({
+  return useQuery<Record<string, string>>({
     queryKey: SETTINGS_KEYS.category(category),
     queryFn: () => settingsService.getSettings(category),
     enabled: !!category,
@@ -31,9 +32,9 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    Setting[],
+    Record<string, string>,
     Error,
-    { category: string; data: Record<string, string | number | boolean> }
+    { category: string; data: Record<string, string> }
   >({
     mutationFn: ({ category, data }) =>
       settingsService.updateSettings(category, data),

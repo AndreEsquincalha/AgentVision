@@ -84,17 +84,32 @@ class DashboardService:
             (success_7d / total_7d * 100) if total_7d > 0 else 0.0
         )
 
+        executions_today = ExecutionStatusCounts(
+            pending=today_counts.get('pending', 0),
+            running=today_counts.get('running', 0),
+            success=today_counts.get('success', 0),
+            failed=today_counts.get('failed', 0),
+        )
+
+        # Total de execucoes hoje (soma de todos os status)
+        today_total = (
+            executions_today.pending
+            + executions_today.running
+            + executions_today.success
+            + executions_today.failed
+        )
+
         return DashboardSummaryResponse(
             active_projects=active_projects,
             active_jobs=active_jobs,
             inactive_jobs=inactive_jobs,
-            executions_today=ExecutionStatusCounts(
-                pending=today_counts.get('pending', 0),
-                running=today_counts.get('running', 0),
-                success=today_counts.get('success', 0),
-                failed=today_counts.get('failed', 0),
-            ),
+            executions_today=executions_today,
             success_rate=round(success_rate, 2),
+            today_executions=today_total,
+            today_success=executions_today.success,
+            today_failed=executions_today.failed,
+            today_running=executions_today.running,
+            success_rate_7d=round(success_rate, 2),
         )
 
     def get_recent_executions(self) -> list[RecentExecutionResponse]:

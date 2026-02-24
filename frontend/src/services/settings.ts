@@ -1,6 +1,6 @@
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/utils/constants';
-import type { Setting, SMTPConfig } from '@/types';
+import type { SMTPConfig } from '@/types';
 
 /**
  * Serviço de Configurações.
@@ -8,30 +8,39 @@ import type { Setting, SMTPConfig } from '@/types';
  * de configurações por categoria.
  */
 
+/** Formato retornado pela API de settings */
+export interface SettingsGroupResponse {
+  category: string;
+  settings: Record<string, string>;
+}
+
 /**
  * Busca as configurações de uma categoria específica.
+ * Retorna o dicionário chave-valor de settings.
  */
 export async function getSettings(
   category: string
-): Promise<Setting[]> {
-  const response = await api.get<Setting[]>(
+): Promise<Record<string, string>> {
+  const response = await api.get<SettingsGroupResponse>(
     API_ENDPOINTS.SETTINGS.BY_CATEGORY(category)
   );
-  return response.data;
+  return response.data.settings;
 }
 
 /**
  * Atualiza as configurações de uma categoria específica.
+ * Retorna o dicionário chave-valor atualizado.
  */
 export async function updateSettings(
   category: string,
-  data: Record<string, string | number | boolean>
-): Promise<Setting[]> {
-  const response = await api.put<Setting[]>(
+  data: Record<string, string>
+): Promise<Record<string, string>> {
+  // Backend espera { settings: { ... } }
+  const response = await api.put<SettingsGroupResponse>(
     API_ENDPOINTS.SETTINGS.BY_CATEGORY(category),
-    data
+    { settings: data }
   );
-  return response.data;
+  return response.data.settings;
 }
 
 /**

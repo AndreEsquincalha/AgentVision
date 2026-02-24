@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Plus, Trash2, CalendarClock } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,10 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { CronScheduleInput } from '@/components/CronScheduleInput';
 import { useCreateJob, useUpdateJob } from '@/hooks/useJobs';
 import { useProjects } from '@/hooks/useProjects';
-import { getNextCronExecutions } from '@/utils/cronHelper';
-import { formatDateTime } from '@/utils/formatters';
 import type { Job } from '@/types';
 
 // --- Schema de validação ---
@@ -121,7 +120,6 @@ const JobForm = memo(function JobForm({
     register,
     handleSubmit,
     control,
-    watch,
     reset,
     formState: { errors },
   } = useForm<JobFormData>({
@@ -140,13 +138,6 @@ const JobForm = memo(function JobForm({
       reset(defaultValues);
     }
   }, [open, defaultValues, reset]);
-
-  // Observa a expressao cron para preview
-  const cronExpression = watch('cron_expression');
-  const nextExecutions = useMemo(
-    () => getNextCronExecutions(cronExpression, 5),
-    [cronExpression]
-  );
 
   // Adiciona um novo canal de entrega
   const handleAddDeliveryConfig = useCallback(() => {
@@ -304,62 +295,10 @@ const JobForm = memo(function JobForm({
             <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-[#9CA3AF]">
               Agendamento
             </h3>
-            <div className="space-y-4">
-              {/* Expressao Cron */}
-              <div>
-                <Label
-                  htmlFor="cron_expression"
-                  className="mb-1.5 text-sm font-medium text-[#F9FAFB]"
-                >
-                  Expressao Cron *
-                </Label>
-                <Input
-                  id="cron_expression"
-                  placeholder="0 8 * * * (diariamente as 08:00)"
-                  aria-invalid={errors.cron_expression ? 'true' : 'false'}
-                  aria-describedby={
-                    errors.cron_expression ? 'cron-error' : undefined
-                  }
-                  className="border-[#2E3348] bg-[#242838] font-mono text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
-                  {...register('cron_expression')}
-                />
-                {errors.cron_expression && (
-                  <p
-                    id="cron-error"
-                    className="mt-1 text-xs text-[#EF4444]"
-                    role="alert"
-                  >
-                    {errors.cron_expression.message}
-                  </p>
-                )}
-                <p className="mt-1 text-xs text-[#6B7280]">
-                  Formato: minuto hora dia_mes mes dia_semana (ex: 0 8 * * 1-5
-                  = dias uteis as 08:00)
-                </p>
-
-                {/* Preview das proximas execucoes */}
-                {nextExecutions.length > 0 && (
-                  <div className="mt-3 rounded-lg border border-[#2E3348] bg-[#242838] p-3">
-                    <div className="mb-2 flex items-center gap-1.5">
-                      <CalendarClock className="size-3.5 text-[#6366F1]" />
-                      <span className="text-xs font-medium text-[#9CA3AF]">
-                        Proximas execucoes
-                      </span>
-                    </div>
-                    <ul className="space-y-1">
-                      {nextExecutions.map((date, index) => (
-                        <li
-                          key={index}
-                          className="text-xs text-[#F9FAFB]"
-                        >
-                          {formatDateTime(date)}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
+            <CronScheduleInput
+              control={control}
+              error={errors.cron_expression?.message}
+            />
           </div>
 
           <Separator className="bg-[#2E3348]" />

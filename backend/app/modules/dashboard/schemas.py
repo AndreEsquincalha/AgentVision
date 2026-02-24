@@ -31,6 +31,13 @@ class DashboardSummaryResponse(BaseModel):
     executions_today: ExecutionStatusCounts
     success_rate: float
 
+    # Campos extras para o frontend
+    today_executions: int = 0
+    today_success: int = 0
+    today_failed: int = 0
+    today_running: int = 0
+    success_rate_7d: float = 0.0
+
 
 class RecentExecutionResponse(BaseModel):
     """

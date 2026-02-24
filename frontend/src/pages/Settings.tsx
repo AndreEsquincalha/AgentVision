@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useSettings, useUpdateSettings, useTestSmtp } from '@/hooks/useSettings';
-import type { Setting, SMTPConfig } from '@/types';
+import type { SMTPConfig } from '@/types';
 
 // --- Schema de validação SMTP ---
 
@@ -34,19 +34,6 @@ const smtpFormSchema = z.object({
 });
 
 type SMTPFormData = z.infer<typeof smtpFormSchema>;
-
-/**
- * Converte a lista de Settings retornada pela API em um objeto chave-valor.
- */
-function settingsToMap(settings: Setting[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const setting of settings) {
-    if (setting.value !== undefined && setting.value !== null) {
-      map[setting.key] = setting.value;
-    }
-  }
-  return map;
-}
 
 /**
  * Página de Configurações.
@@ -78,14 +65,13 @@ export default function Settings() {
       };
     }
 
-    const map = settingsToMap(smtpSettings);
     return {
-      smtp_host: map['smtp_host'] || '',
-      smtp_port: map['smtp_port'] ? parseInt(map['smtp_port'], 10) : 587,
-      smtp_username: map['smtp_username'] || '',
-      smtp_password: '', // Não preenchemos a senha existente por segurança
-      smtp_use_tls: map['smtp_use_tls'] === 'true',
-      smtp_sender_email: map['smtp_sender_email'] || '',
+      smtp_host: smtpSettings['smtp_host'] || '',
+      smtp_port: smtpSettings['smtp_port'] ? parseInt(smtpSettings['smtp_port'], 10) : 587,
+      smtp_username: smtpSettings['smtp_username'] || '',
+      smtp_password: '',
+      smtp_use_tls: smtpSettings['smtp_use_tls'] === 'true',
+      smtp_sender_email: smtpSettings['smtp_sender_email'] || '',
     };
   }, [smtpSettings]);
 
@@ -111,18 +97,17 @@ export default function Settings() {
   // Verifica se a senha já está configurada no backend
   const hasExistingPassword = useMemo(() => {
     if (!smtpSettings) return false;
-    const map = settingsToMap(smtpSettings);
-    // O backend retorna um indicador se a senha está configurada
-    return !!map['smtp_password'];
+    return !!smtpSettings['smtp_password'];
   }, [smtpSettings]);
 
   // Submissão do formulário SMTP
   const onSubmitSmtp = useCallback(
     async (data: SMTPFormData) => {
-      const payload: Record<string, string | number | boolean> = {
+      // Backend espera dict[str, str] — converte tudo para string
+      const payload: Record<string, string> = {
         smtp_host: data.smtp_host,
-        smtp_port: data.smtp_port,
-        smtp_use_tls: data.smtp_use_tls,
+        smtp_port: String(data.smtp_port),
+        smtp_use_tls: String(data.smtp_use_tls),
         smtp_sender_email: data.smtp_sender_email,
       };
 
