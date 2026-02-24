@@ -55,6 +55,12 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         # -----------------------------------------------------------------
         # 1. Busca o Job com projeto e delivery configs
         # -----------------------------------------------------------------
+        # Importa todos os modelos para garantir que o SQLAlchemy resolva relacionamentos
+        from app.modules.jobs.models import Job  # noqa: F401
+        from app.modules.projects.models import Project  # noqa: F401
+        from app.modules.executions.models import Execution  # noqa: F401
+        from app.modules.delivery.models import DeliveryConfig, DeliveryLog  # noqa: F401
+        from app.modules.prompts.models import PromptTemplate  # noqa: F401
         from app.modules.jobs.repository import JobRepository
         from app.modules.projects.repository import ProjectRepository
         from app.modules.projects.service import ProjectService
@@ -81,9 +87,26 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             logger.error(error_msg)
             return {'success': False, 'error': error_msg}
 
+        # Extrai dados do job e projeto em variaveis locais para evitar
+        # que o SQLAlchemy persista alteracoes acidentais nos objetos
+        # durante os commits subsequentes da sessao (BUG-006).
+        job_name: str = job.name
+        job_agent_prompt: str = job.agent_prompt
+        job_execution_params: dict | None = (
+            dict(job.execution_params) if job.execution_params else None
+        )
+        project_name: str = project.name
+        project_base_url: str = project.base_url
+        project_id: uuid.UUID = project.id
+
+        # Remove o Job e o Project do rastreamento da sessao para
+        # garantir que nenhum commit subsequente altere seus dados.
+        db.expunge(job)
+        db.expunge(project)
+
         logger.info(
             'Job encontrado: %s (projeto: %s, URL: %s)',
-            job.name, project.name, project.base_url,
+            job_name, project_name, project_base_url,
         )
 
         # -----------------------------------------------------------------
@@ -110,8 +133,8 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         )
         logger.info('Execution %s atualizada para running', str(execution_id))
 
-        all_logs.append(f'Iniciando execucao do job "{job.name}"')
-        all_logs.append(f'Projeto: {project.name} | URL: {project.base_url}')
+        all_logs.append(f'Iniciando execucao do job "{job_name}"')
+        all_logs.append(f'Projeto: {project_name} | URL: {project_base_url}')
         all_logs.append(f'Dry run: {is_dry_run}')
         all_logs.append(f'Task ID: {self.request.id}')
 
@@ -120,24 +143,24 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         # -----------------------------------------------------------------
         credentials: dict | None = None
         try:
-            credentials = project_service.get_decrypted_credentials(project.id)
+            credentials = project_service.get_decrypted_credentials(project_id)
             if credentials:
                 all_logs.append('Credenciais do projeto carregadas com sucesso')
             else:
                 all_logs.append('Projeto sem credenciais configuradas')
         except Exception as e:
             all_logs.append(f'Aviso: nao foi possivel carregar credenciais: {str(e)}')
-            logger.warning('Falha ao carregar credenciais do projeto %s: %s', project.id, str(e))
+            logger.warning('Falha ao carregar credenciais do projeto %s: %s', project_id, str(e))
 
         llm_config: dict = {}
         try:
-            llm_config = project_service.get_llm_config(project.id)
+            llm_config = project_service.get_llm_config(project_id)
             all_logs.append(
                 f'LLM configurado: {llm_config.get("provider")} / {llm_config.get("model")}'
             )
         except Exception as e:
             all_logs.append(f'Aviso: nao foi possivel carregar config LLM: {str(e)}')
-            logger.warning('Falha ao carregar config LLM do projeto %s: %s', project.id, str(e))
+            logger.warning('Falha ao carregar config LLM do projeto %s: %s', project_id, str(e))
 
         # -----------------------------------------------------------------
         # 5. Inicializa e executa o BrowserAgent
@@ -147,7 +170,7 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         from app.modules.agents.browser_agent import BrowserAgent
 
         browser_agent = BrowserAgent(
-            base_url=project.base_url,
+            base_url=project_base_url,
             credentials=credentials,
             headless=True,
             timeout=llm_config.get('timeout', 120),
@@ -155,7 +178,7 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
 
         # Monta os parametros de execucao, incluindo config do LLM
         # para que o browser-use possa usar o agente inteligente
-        exec_params = dict(job.execution_params or {})
+        exec_params = dict(job_execution_params or {})
         if llm_config.get('api_key'):
             exec_params['llm_config'] = {
                 'provider': llm_config.get('provider'),
@@ -165,7 +188,7 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             }
 
         # Executa o agente (async -> sync bridge)
-        prompt = job.agent_prompt
+        prompt = job_agent_prompt
         browser_result = _run_async(browser_agent.run(
             prompt=prompt,
             execution_params=exec_params,
@@ -237,9 +260,9 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                 analyzer = VisionAnalyzer.from_llm_config(llm_config)
 
                 analysis_metadata = {
-                    'project_name': project.name,
-                    'job_name': job.name,
-                    'base_url': project.base_url,
+                    'project_name': project_name,
+                    'job_name': job_name,
+                    'base_url': project_base_url,
                     'execution_id': str(execution_id),
                 }
 
@@ -291,10 +314,10 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                 )
 
                 pdf_metadata = {
-                    'project_name': project.name,
-                    'job_name': job.name,
+                    'project_name': project_name,
+                    'job_name': job_name,
                     'execution_id': str(execution_id),
-                    'base_url': project.base_url,
+                    'base_url': project_base_url,
                     'started_at': started_at,
                 }
 
@@ -337,10 +360,10 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
 
                 try:
                     execution_data = {
-                        'project_name': project.name,
-                        'job_name': job.name,
+                        'project_name': project_name,
+                        'job_name': job_name,
                         'execution_id': str(execution_id),
-                        'base_url': project.base_url,
+                        'base_url': project_base_url,
                         'started_at': str(started_at),
                         'analysis_text': analysis_text[:500] if analysis_text else '',
                     }
@@ -470,6 +493,11 @@ def check_and_dispatch_jobs(self) -> dict:
     dispatched_count = 0
 
     try:
+        # Importa todos os modelos para garantir que o SQLAlchemy resolva os relacionamentos
+        from app.modules.jobs.models import Job  # noqa: F401
+        from app.modules.projects.models import Project  # noqa: F401
+        from app.modules.executions.models import Execution  # noqa: F401
+        from app.modules.delivery.models import DeliveryConfig, DeliveryLog  # noqa: F401
         from app.modules.jobs.repository import JobRepository
         from datetime import timedelta
 

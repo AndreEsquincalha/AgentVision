@@ -53,12 +53,15 @@ def create_access_token(subject: str) -> str:
     Returns:
         Token JWT assinado.
     """
-    expire = datetime.now(UTC) + timedelta(
+    now = datetime.now(UTC)
+    expire = now + timedelta(
         minutes=settings.jwt_access_token_expire_minutes
     )
     to_encode = {
         'sub': subject,
         'exp': expire,
+        'iat': now,
+        'jti': str(uuid.uuid4()),
         'type': 'access',
     }
     encoded_jwt: str = jwt.encode(
@@ -79,12 +82,15 @@ def create_refresh_token(subject: str) -> str:
     Returns:
         Token JWT assinado.
     """
-    expire = datetime.now(UTC) + timedelta(
+    now = datetime.now(UTC)
+    expire = now + timedelta(
         days=settings.jwt_refresh_token_expire_days
     )
     to_encode = {
         'sub': subject,
         'exp': expire,
+        'iat': now,
+        'jti': str(uuid.uuid4()),
         'type': 'refresh',
     }
     encoded_jwt: str = jwt.encode(

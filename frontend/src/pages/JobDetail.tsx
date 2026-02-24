@@ -41,9 +41,9 @@ import api from '@/services/api';
 import { API_ENDPOINTS } from '@/utils/constants';
 
 /**
- * Pagina de detalhes de um job.
- * Exibe informacoes gerais, configuracao cron, prompt, canais de entrega
- * e ultimas execucoes do job.
+ * Página de detalhes de um job.
+ * Exibe informações gerais, configuração cron, prompt, canais de entrega
+ * e últimas execuções do job.
  */
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -164,7 +164,7 @@ export default function JobDetail() {
       },
       {
         id: 'duration',
-        header: 'Duracao',
+        header: 'Duração',
         cell: (row) => (
           <span className="text-sm text-[#9CA3AF]">
             {formatDuration(row.duration_seconds)}
@@ -182,7 +182,7 @@ export default function JobDetail() {
                 : 'bg-[#6366F1]/10 text-[#6366F1]'
             }`}
           >
-            {row.is_dry_run ? 'Dry Run' : 'Producao'}
+            {row.is_dry_run ? 'Dry Run' : 'Produção'}
           </span>
         ),
         className: 'w-28',
@@ -253,10 +253,10 @@ export default function JobDetail() {
         <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-12 text-center">
           <XCircle className="mx-auto mb-3 size-10 text-[#EF4444]" />
           <h2 className="text-lg font-semibold text-[#F9FAFB]">
-            Job nao encontrado
+            Job não encontrado
           </h2>
           <p className="mt-1 text-sm text-[#9CA3AF]">
-            O job solicitado nao existe ou foi removido.
+            O job solicitado não existe ou foi removido.
           </p>
         </div>
       </div>
@@ -356,12 +356,12 @@ export default function JobDetail() {
 
       {/* Cards de informacoes */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Card: Informacoes Gerais */}
+        {/* Card: Informações Gerais */}
         <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
           <div className="mb-4 flex items-center gap-2">
             <FolderKanban className="size-5 text-[#6366F1]" />
             <h2 className="text-base font-semibold text-[#F9FAFB]">
-              Informacoes Gerais
+              Informações Gerais
             </h2>
           </div>
 
@@ -393,7 +393,7 @@ export default function JobDetail() {
 
           <div className="space-y-4">
             <InfoRow
-              label="Expressao Cron"
+              label="Expressão Cron"
               value={
                 <code className="rounded bg-[#242838] px-2 py-0.5 font-mono text-xs text-[#F9FAFB]">
                   {job.cron_expression}
@@ -401,11 +401,11 @@ export default function JobDetail() {
               }
             />
             <InfoRow
-              label="Descricao"
+              label="Descrição"
               value={formatCronExpression(job.cron_expression)}
             />
             <InfoRow
-              label="Proxima execucao"
+              label="Próxima execução"
               value={
                 job.next_execution
                   ? formatDateTime(job.next_execution)
@@ -420,7 +420,7 @@ export default function JobDetail() {
           {nextExecutions.length > 0 && (
             <div className="mt-4 rounded-lg border border-[#2E3348] bg-[#242838] p-3">
               <p className="mb-2 text-xs font-medium text-[#9CA3AF]">
-                Proximas execucoes agendadas
+                Próximas execuções agendadas
               </p>
               <ul className="space-y-1">
                 {nextExecutions.map((date, index) => (
@@ -456,7 +456,7 @@ export default function JobDetail() {
           Object.keys(job.execution_params).length > 0 && (
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-[#9CA3AF]">
-                Parametros de Execucao
+                Parâmetros de Execução
               </p>
               <pre className="overflow-auto rounded-lg border border-[#2E3348] bg-[#242838] p-3 font-mono text-xs text-[#F9FAFB]">
                 {JSON.stringify(job.execution_params, null, 2)}
@@ -521,7 +521,7 @@ export default function JobDetail() {
         <div className="mb-4 flex items-center gap-2">
           <History className="size-5 text-[#10B981]" />
           <h2 className="text-base font-semibold text-[#F9FAFB]">
-            Ultimas Execucoes
+            Últimas Execuções
           </h2>
         </div>
 
@@ -532,8 +532,8 @@ export default function JobDetail() {
           pagination={executionsPagination}
           onPageChange={handleExecutionsPageChange}
           rowKey={(row) => row.id}
-          emptyMessage="Nenhuma execucao encontrada"
-          emptyDescription="As execucoes deste job aparecerao aqui."
+          emptyMessage="Nenhuma execução encontrada"
+          emptyDescription="As execuções deste job aparecerão aqui."
           skeletonRows={3}
         />
       </div>
@@ -550,7 +550,7 @@ export default function JobDetail() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Excluir Job"
-        description={`Tem certeza que deseja excluir o job "${job.name}"? Esta acao nao pode ser desfeita. Todas as execucoes associadas tambem serao removidas.`}
+        description={`Tem certeza que deseja excluir o job "${job.name}"? Esta ação não pode ser desfeita. Todas as execuções associadas também serão removidas.`}
         confirmLabel="Excluir"
         variant="danger"
         onConfirm={handleConfirmDelete}

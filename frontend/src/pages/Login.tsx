@@ -175,7 +175,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={togglePasswordVisibility}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#9CA3AF] focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] transition-colors hover:text-[#9CA3AF] focus:outline-none focus-visible:text-[#9CA3AF]"
                     aria-label={
                       showPassword ? 'Ocultar senha' : 'Mostrar senha'
                     }

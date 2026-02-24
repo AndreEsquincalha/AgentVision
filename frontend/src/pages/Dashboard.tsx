@@ -2,11 +2,10 @@ import { useMemo, memo } from 'react';
 import { useNavigate } from 'react-router';
 import {
   FolderKanban,
-  Briefcase,
-  Play,
+  CalendarClock,
+  History,
   TrendingUp,
   AlertTriangle,
-  CalendarClock,
   Clock,
 } from 'lucide-react';
 import {
@@ -45,14 +44,14 @@ const METRIC_CARDS: MetricCardConfig[] = [
   {
     label: 'Jobs Ativos',
     key: 'active_jobs',
-    icon: Briefcase,
+    icon: CalendarClock,
     iconBgColor: 'bg-[#8B5CF6]/10',
     iconColor: 'text-[#8B5CF6]',
   },
   {
     label: 'Execuções Hoje',
     key: 'today_executions',
-    icon: Play,
+    icon: History,
     iconBgColor: 'bg-[#22D3EE]/10',
     iconColor: 'text-[#22D3EE]',
   },
@@ -89,7 +88,7 @@ const MetricCard = memo(function MetricCard({
   formatValue?: (value: number) => string;
 }) {
   return (
-    <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
+    <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6 transition-colors hover:border-[#6366F1]/30">
       <div className="flex items-center gap-4">
         <div className={cn('rounded-lg p-2.5', iconBgColor)}>
           <Icon className={cn('size-5', iconColor)} />
@@ -154,7 +153,7 @@ const RecentExecutionsSection = memo(function RecentExecutionsSection({
 
       {executions.length === 0 ? (
         <div className="px-6 py-8 text-center">
-          <Play className="mx-auto mb-2 size-8 text-[#6B7280]" />
+          <History className="mx-auto mb-2 size-8 text-[#6B7280]" />
           <p className="text-sm text-[#9CA3AF]">Nenhuma execução recente</p>
         </div>
       ) : (
@@ -163,7 +162,7 @@ const RecentExecutionsSection = memo(function RecentExecutionsSection({
             <button
               key={execution.id}
               onClick={() => navigate(`/executions/${execution.id}`)}
-              className="flex w-full items-center gap-4 px-6 py-3 text-left transition-colors hover:bg-[#2A2F42]"
+              className="flex w-full items-center gap-4 px-6 py-3 text-left transition-colors hover:bg-[#2A2F42] focus:outline-none focus-visible:bg-[#2A2F42] focus-visible:ring-1 focus-visible:ring-[#6366F1]"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-[#F9FAFB]">
@@ -312,7 +311,7 @@ const FailureAlertsSection = memo(function FailureAlertsSection({
             <button
               key={failure.execution_id}
               onClick={() => navigate(`/executions/${failure.execution_id}`)}
-              className="flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-[#2A2F42]"
+              className="flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-[#2A2F42] focus:outline-none focus-visible:bg-[#2A2F42] focus-visible:ring-1 focus-visible:ring-[#6366F1]"
             >
               <div className="rounded-full bg-[#EF4444]/10 p-1.5">
                 <AlertTriangle className="size-3.5 text-[#EF4444]" />

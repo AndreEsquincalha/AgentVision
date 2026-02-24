@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreatePrompt, useUpdatePrompt } from '@/hooks/usePrompts';
+import { cn } from '@/lib/utils';
 import { PROMPT_CATEGORIES } from '@/utils/constants';
 import type { PromptTemplate } from '@/types';
 
@@ -147,7 +148,10 @@ const PromptForm = memo(function PromptForm({
               placeholder="Nome do template"
               aria-invalid={errors.name ? 'true' : 'false'}
               aria-describedby={errors.name ? 'prompt-name-error' : undefined}
-              className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+              className={cn(
+                'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                errors.name && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+              )}
               {...register('name')}
             />
             {errors.name && (
@@ -240,7 +244,10 @@ const PromptForm = memo(function PromptForm({
               aria-describedby={
                 errors.content ? 'prompt-content-error' : undefined
               }
-              className="min-h-[200px] border-[#2E3348] bg-[#242838] font-mono text-sm text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+              className={cn(
+                'min-h-[200px] border-[#2E3348] bg-[#242838] font-mono text-sm text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                errors.content && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+              )}
               {...register('content')}
             />
             {errors.content && (

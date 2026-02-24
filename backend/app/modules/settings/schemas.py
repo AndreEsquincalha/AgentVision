@@ -105,14 +105,12 @@ class SMTPConfigSchema(BaseModel):
         description='Porta do servidor SMTP',
     )
     username: str = Field(
-        ...,
-        min_length=1,
-        description='Usuario para autenticacao SMTP',
+        '',
+        description='Usuario para autenticacao SMTP (opcional)',
     )
     password: str = Field(
-        ...,
-        min_length=1,
-        description='Senha para autenticacao SMTP',
+        '',
+        description='Senha para autenticacao SMTP (opcional)',
     )
     use_tls: bool = Field(
         True,

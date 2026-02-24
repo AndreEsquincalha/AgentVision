@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useCreateProject, useUpdateProject } from '@/hooks/useProjects';
+import { cn } from '@/lib/utils';
 import {
   LLM_PROVIDERS,
   getModelsByProvider,
@@ -221,7 +222,10 @@ const ProjectForm = memo(function ProjectForm({
                   placeholder="Meu Projeto"
                   aria-invalid={errors.name ? 'true' : 'false'}
                   aria-describedby={errors.name ? 'name-error' : undefined}
-                  className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                  className={cn(
+                    'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                    errors.name && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                  )}
                   {...register('name')}
                 />
                 {errors.name && (
@@ -250,16 +254,23 @@ const ProjectForm = memo(function ProjectForm({
                   aria-describedby={
                     errors.base_url ? 'base_url-error' : undefined
                   }
-                  className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                  className={cn(
+                    'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                    errors.base_url && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                  )}
                   {...register('base_url')}
                 />
-                {errors.base_url && (
+                {errors.base_url ? (
                   <p
                     id="base_url-error"
                     className="mt-1 text-xs text-[#EF4444]"
                     role="alert"
                   >
                     {errors.base_url.message}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-[#6B7280]">
+                    URL completa do site que será automatizado (incluindo https://).
                   </p>
                 )}
               </div>

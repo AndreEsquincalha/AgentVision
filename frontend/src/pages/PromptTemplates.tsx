@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileText } from 'lucide-react';
 import { usePrompts, useDeletePrompt } from '@/hooks/usePrompts';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
@@ -309,8 +309,18 @@ export default function PromptTemplates() {
         pagination={pagination}
         onPageChange={handlePageChange}
         rowKey={(row) => row.id}
+        emptyIcon={FileText}
         emptyMessage="Nenhum template encontrado"
-        emptyDescription="Crie um novo template de prompt para reutilizar em seus jobs."
+        emptyDescription="Templates de prompt ajudam a reutilizar instruções para seus agentes de IA. Crie seu primeiro template."
+        emptyAction={
+          <Button
+            onClick={handleNewPrompt}
+            className="bg-[#6366F1] text-sm font-medium text-white hover:bg-[#4F46E5]"
+          >
+            <Plus className="size-4" />
+            Criar Primeiro Template
+          </Button>
+        }
       />
 
       {/* Dialog de criação/edição */}

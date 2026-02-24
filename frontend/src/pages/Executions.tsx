@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   Eye,
   Filter,
+  History,
 } from 'lucide-react';
 import { useExecutions } from '@/hooks/useExecutions';
 import { useProjects } from '@/hooks/useProjects';
@@ -208,7 +209,7 @@ export default function Executions() {
       },
       {
         id: 'duration',
-        header: 'Duracao',
+        header: 'Duração',
         cell: (row) => (
           <span className="text-sm text-[#9CA3AF]">
             {formatDuration(row.duration_seconds)}
@@ -227,7 +228,7 @@ export default function Executions() {
                 : 'bg-[#6366F1]/10 text-[#6366F1]'
             }`}
           >
-            {row.is_dry_run ? 'Dry Run' : 'Producao'}
+            {row.is_dry_run ? 'Dry Run' : 'Produção'}
           </span>
         ),
         className: 'w-28 hidden sm:table-cell',
@@ -247,7 +248,7 @@ export default function Executions() {
                     handleViewExecution(row);
                   }}
                   className="text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white"
-                  aria-label={`Ver detalhes da execucao ${row.job_name ?? row.id}`}
+                  aria-label={`Ver detalhes da execução ${row.job_name ?? row.id}`}
                 >
                   <Eye className="size-3.5" />
                 </Button>
@@ -282,8 +283,8 @@ export default function Executions() {
     <div className="space-y-6">
       {/* Cabecalho */}
       <PageHeader
-        title="Execucoes"
-        description="Historico de execucoes dos jobs de automacao."
+        title="Execuções"
+        description="Histórico de execuções dos jobs de automação."
       />
 
       {/* Filtros principais */}
@@ -441,7 +442,7 @@ export default function Executions() {
                 htmlFor="date-to"
                 className="shrink-0 text-sm text-[#9CA3AF]"
               >
-                Ate:
+                Até:
               </label>
               <Input
                 id="date-to"
@@ -464,8 +465,9 @@ export default function Executions() {
         pagination={pagination}
         onPageChange={handlePageChange}
         rowKey={(row) => row.id}
-        emptyMessage="Nenhuma execucao encontrada"
-        emptyDescription="As execucoes dos seus jobs aparecerao aqui quando forem executados."
+        emptyIcon={History}
+        emptyMessage="Nenhuma execução encontrada"
+        emptyDescription="As execuções dos seus jobs aparecerão aqui automaticamente quando forem executados. Configure um job com agendamento ou execute um dry run."
       />
     </div>
   );

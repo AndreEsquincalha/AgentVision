@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
@@ -13,13 +14,45 @@ from app.shared.exceptions import (
     UnauthorizedException,
 )
 
+logger = logging.getLogger(__name__)
+
+# Valores padrao inseguros que devem ser alterados em producao
+_INSECURE_DEFAULTS: dict[str, str] = {
+    'jwt_secret_key': 'change-me-to-a-long-random-secret-key',
+    'encryption_key': 'change-me-to-a-valid-fernet-key',
+    'admin_password': 'admin123',
+}
+
+
+def _check_security_settings() -> None:
+    """
+    Verifica configuracoes de seguranca no startup.
+
+    Emite avisos se valores padrao inseguros estiverem em uso,
+    mas nao bloqueia a inicializacao para permitir desenvolvimento local.
+    """
+    for setting_name, insecure_value in _INSECURE_DEFAULTS.items():
+        current_value = getattr(settings, setting_name, None)
+        if current_value == insecure_value:
+            logger.warning(
+                'AVISO DE SEGURANCA: A configuracao "%s" esta usando o valor padrao. '
+                'Altere para um valor seguro no arquivo .env antes de usar em producao.',
+                setting_name.upper(),
+            )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Gerencia o ciclo de vida da aplicacao (startup/shutdown)."""
-    # Startup: inicializacoes necessarias
+    # Startup: verifica configuracoes de seguranca
+    _check_security_settings()
+    logger.info(
+        'AgentVision API v1.0.0 iniciada. CORS origens: %s',
+        settings.cors_origins,
+    )
     yield
     # Shutdown: limpeza de recursos
+    logger.info('AgentVision API encerrada.')
 
 
 app = FastAPI(
@@ -38,8 +71,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
+    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allow_headers=[
+        'Authorization',
+        'Content-Type',
+        'Accept',
+        'Origin',
+        'X-Requested-With',
+    ],
+    expose_headers=['Content-Disposition'],
 )
 
 # -------------------------------------------------------------------------

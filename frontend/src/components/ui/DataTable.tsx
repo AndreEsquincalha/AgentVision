@@ -1,6 +1,7 @@
 import { memo, useMemo, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -52,6 +53,10 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   /** Descrição adicional para estado vazio */
   emptyDescription?: string;
+  /** Ícone para estado vazio */
+  emptyIcon?: LucideIcon;
+  /** Ação call-to-action para estado vazio */
+  emptyAction?: ReactNode;
   /** Número de linhas skeleton exibidas durante loading */
   skeletonRows?: number;
   /** Função para extrair key única de cada linha */
@@ -72,6 +77,8 @@ function DataTableInner<T>({
   onPageChange,
   emptyMessage = 'Nenhum registro encontrado',
   emptyDescription,
+  emptyIcon: EmptyIcon,
+  emptyAction,
   skeletonRows = 5,
   rowKey,
   className,
@@ -112,6 +119,9 @@ function DataTableInner<T>({
     []
   );
 
+  // Ícone do empty state (fallback para Inbox)
+  const ResolvedEmptyIcon = EmptyIcon ?? Inbox;
+
   return (
     <div
       className={cn(
@@ -119,6 +129,8 @@ function DataTableInner<T>({
         className
       )}
     >
+      {/* Container com scroll horizontal para responsividade mobile */}
+      <div className="overflow-x-auto">
       <Table>
         {/* Cabeçalho */}
         <TableHeader>
@@ -162,20 +174,25 @@ function DataTableInner<T>({
             <TableRow className="hover:bg-transparent">
               <TableCell
                 colSpan={columns.length}
-                className="px-6 py-12 text-center"
+                className="px-6 py-16 text-center"
               >
                 <div className="flex flex-col items-center gap-3">
-                  <Inbox className="size-10 text-[#6B7280]" />
+                  <div className="rounded-full bg-[#242838] p-4">
+                    <ResolvedEmptyIcon className="size-8 text-[#6B7280]" />
+                  </div>
                   <div>
                     <p className="text-sm font-medium text-[#9CA3AF]">
                       {emptyMessage}
                     </p>
                     {emptyDescription && (
-                      <p className="mt-1 text-xs text-[#6B7280]">
+                      <p className="mt-1 max-w-sm text-xs text-[#6B7280]">
                         {emptyDescription}
                       </p>
                     )}
                   </div>
+                  {emptyAction && (
+                    <div className="mt-2">{emptyAction}</div>
+                  )}
                 </div>
               </TableCell>
             </TableRow>
@@ -203,10 +220,11 @@ function DataTableInner<T>({
             })}
         </TableBody>
       </Table>
+      </div>{/* Fim do overflow-x-auto */}
 
       {/* Paginação */}
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-[#2E3348] px-6 py-3">
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-[#2E3348] px-4 py-3 sm:flex-row sm:px-6">
           <p className="text-xs text-[#9CA3AF]">
             Mostrando{' '}
             <span className="font-medium text-[#F9FAFB]">
@@ -236,15 +254,14 @@ function DataTableInner<T>({
               aria-label="Página anterior"
             >
               <ChevronLeft className="size-4" />
-              Anterior
+              <span className="hidden sm:inline">Anterior</span>
             </Button>
 
             <span className="text-xs text-[#9CA3AF]">
-              Página{' '}
               <span className="font-medium text-[#F9FAFB]">
                 {pagination.page}
               </span>
-              {' '}de{' '}
+              {' / '}
               <span className="font-medium text-[#F9FAFB]">
                 {pagination.totalPages}
               </span>
@@ -258,7 +275,7 @@ function DataTableInner<T>({
               className="border-[#2E3348] bg-transparent text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white disabled:opacity-50"
               aria-label="Próxima página"
             >
-              Próximo
+              <span className="hidden sm:inline">Próximo</span>
               <ChevronRight className="size-4" />
             </Button>
           </div>

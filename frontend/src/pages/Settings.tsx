@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useSettings, useUpdateSettings, useTestSmtp } from '@/hooks/useSettings';
+import { cn } from '@/lib/utils';
 import type { SMTPConfig } from '@/types';
 
 // --- Schema de validação SMTP ---
@@ -183,7 +184,7 @@ export default function Settings() {
               return (
                 <button
                   key={section.id}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#6366F1] ${
                     isActive
                       ? 'bg-[#6366F1]/10 text-[#6366F1]'
                       : 'text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white'
@@ -248,7 +249,10 @@ export default function Settings() {
                         aria-describedby={
                           errors.smtp_host ? 'smtp_host-error' : undefined
                         }
-                        className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                        className={cn(
+                          'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                          errors.smtp_host && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                        )}
                         {...register('smtp_host')}
                       />
                       {errors.smtp_host && (
@@ -280,7 +284,10 @@ export default function Settings() {
                         aria-describedby={
                           errors.smtp_port ? 'smtp_port-error' : undefined
                         }
-                        className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                        className={cn(
+                          'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                          errors.smtp_port && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                        )}
                         {...register('smtp_port', { valueAsNumber: true })}
                       />
                       {errors.smtp_port && (
@@ -358,7 +365,10 @@ export default function Settings() {
                           ? 'smtp_sender_email-error'
                           : undefined
                       }
-                      className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                      className={cn(
+                        'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                        errors.smtp_sender_email && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                      )}
                       {...register('smtp_sender_email')}
                     />
                     {errors.smtp_sender_email && (

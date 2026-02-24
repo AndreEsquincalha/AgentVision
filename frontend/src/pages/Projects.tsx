@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { Plus, Eye, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Eye, Pencil, Trash2, Search, FolderKanban } from 'lucide-react';
 import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
@@ -344,8 +344,18 @@ export default function Projects() {
         pagination={pagination}
         onPageChange={handlePageChange}
         rowKey={(row) => row.id}
+        emptyIcon={FolderKanban}
         emptyMessage="Nenhum projeto encontrado"
-        emptyDescription="Crie um novo projeto para começar a configurar suas automações."
+        emptyDescription="Projetos são o ponto de partida para suas automações. Crie seu primeiro projeto para começar."
+        emptyAction={
+          <Button
+            onClick={handleNewProject}
+            className="bg-[#6366F1] text-sm font-medium text-white hover:bg-[#4F46E5]"
+          >
+            <Plus className="size-4" />
+            Criar Primeiro Projeto
+          </Button>
+        }
       />
 
       {/* Dialog de criação/edição */}

@@ -29,14 +29,28 @@ class StorageClient:
         self._bucket = settings.minio_bucket
 
     def ensure_bucket_exists(self) -> None:
-        """Cria o bucket padrao se ele nao existir."""
+        """
+        Cria o bucket padrao se ele nao existir.
+
+        O bucket e criado como privado por padrao (sem policy publica).
+        Acesso a objetos e feito exclusivamente via presigned URLs.
+        """
         try:
             self._client.head_bucket(Bucket=self._bucket)
             logger.info('Bucket "%s" ja existe.', self._bucket)
         except ClientError:
             try:
                 self._client.create_bucket(Bucket=self._bucket)
-                logger.info('Bucket "%s" criado com sucesso.', self._bucket)
+                logger.info('Bucket "%s" criado com sucesso (acesso privado).', self._bucket)
+
+                # Garante que o bucket nao possui policy publica.
+                # Remover qualquer policy existente garante acesso privado.
+                try:
+                    self._client.delete_bucket_policy(Bucket=self._bucket)
+                except ClientError:
+                    # Nao ha policy para remover — bucket ja e privado
+                    pass
+
             except ClientError as e:
                 logger.error('Erro ao criar bucket "%s": %s', self._bucket, e)
                 raise
@@ -111,6 +125,10 @@ class StorageClient:
         """
         Gera uma URL presigned para acesso temporario ao arquivo.
 
+        Quando MINIO_PUBLIC_ENDPOINT esta configurado, substitui o endpoint
+        interno (Docker) pelo endpoint publico na URL gerada, permitindo
+        acesso pelo browser do usuario.
+
         Args:
             key: Caminho/nome do arquivo no bucket.
             expiration: Tempo de expiracao da URL em segundos (padrao: 1 hora).
@@ -129,6 +147,14 @@ class StorageClient:
                 },
                 ExpiresIn=expiration,
             )
+
+            # Substitui o endpoint interno pelo publico para que o browser
+            # do usuario consiga acessar a URL (ex: minio:9000 -> localhost:9000)
+            public_endpoint = settings.minio_public_endpoint
+            if public_endpoint:
+                internal_endpoint = settings.minio_endpoint
+                url = url.replace(internal_endpoint, public_endpoint, 1)
+
             return url
         except ClientError as e:
             logger.error('Erro ao gerar URL presigned para %s: %s', key, e)

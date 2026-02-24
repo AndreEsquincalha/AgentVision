@@ -8,6 +8,7 @@ import {
   Search,
   Play,
   Loader2,
+  CalendarClock,
 } from 'lucide-react';
 import { useJobs, useDeleteJob, useToggleJob, useDryRun } from '@/hooks/useJobs';
 import { useProjects } from '@/hooks/useProjects';
@@ -223,7 +224,7 @@ export default function Jobs() {
       },
       {
         id: 'next_execution',
-        header: 'Proxima Execucao',
+        header: 'Próxima Execução',
         cell: (row) => (
           <span className="text-sm text-[#9CA3AF]">
             {row.next_execution ? formatDateTime(row.next_execution) : '-'}
@@ -259,7 +260,7 @@ export default function Jobs() {
       },
       {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: (row) => (
           <div className="flex items-center gap-1">
             <Tooltip>
@@ -367,7 +368,7 @@ export default function Jobs() {
       {/* Cabecalho */}
       <PageHeader
         title="Jobs"
-        description="Gerencie os jobs de automacao e seus agendamentos."
+        description="Gerencie os jobs de automação e seus agendamentos."
         action={
           <Button
             onClick={handleNewJob}
@@ -458,8 +459,18 @@ export default function Jobs() {
         pagination={pagination}
         onPageChange={handlePageChange}
         rowKey={(row) => row.id}
+        emptyIcon={CalendarClock}
         emptyMessage="Nenhum job encontrado"
-        emptyDescription="Crie um novo job para comecar a automatizar suas tarefas."
+        emptyDescription="Jobs executam automações em horários agendados. Crie seu primeiro job para começar a automatizar."
+        emptyAction={
+          <Button
+            onClick={handleNewJob}
+            className="bg-[#6366F1] text-sm font-medium text-white hover:bg-[#4F46E5]"
+          >
+            <Plus className="size-4" />
+            Criar Primeiro Job
+          </Button>
+        }
       />
 
       {/* Dialog de criacao/edicao */}
@@ -474,7 +485,7 @@ export default function Jobs() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Excluir Job"
-        description={`Tem certeza que deseja excluir o job "${jobToDelete?.name}"? Esta acao nao pode ser desfeita. Todas as execucoes associadas tambem serao removidas.`}
+        description={`Tem certeza que deseja excluir o job "${jobToDelete?.name}"? Esta ação não pode ser desfeita. Todas as execuções associadas também serão removidas.`}
         confirmLabel="Excluir"
         variant="danger"
         onConfirm={handleConfirmDelete}

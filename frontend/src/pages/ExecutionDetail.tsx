@@ -238,15 +238,15 @@ export default function ExecutionDetail() {
           className="text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white"
         >
           <ArrowLeft className="size-4" />
-          Voltar para Execucoes
+          Voltar para Execuções
         </Button>
         <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-12 text-center">
           <XCircle className="mx-auto mb-3 size-10 text-[#EF4444]" />
           <h2 className="text-lg font-semibold text-[#F9FAFB]">
-            Execucao nao encontrada
+            Execução não encontrada
           </h2>
           <p className="mt-1 text-sm text-[#9CA3AF]">
-            A execucao solicitada nao existe ou foi removida.
+            A execução solicitada não existe ou foi removida.
           </p>
         </div>
       </div>
@@ -263,7 +263,7 @@ export default function ExecutionDetail() {
             size="sm"
             onClick={handleBack}
             className="text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white"
-            aria-label="Voltar para lista de execucoes"
+            aria-label="Voltar para lista de execuções"
           >
             <ArrowLeft className="size-4" />
             Voltar
@@ -271,7 +271,7 @@ export default function ExecutionDetail() {
           <Separator orientation="vertical" className="h-6 bg-[#2E3348]" />
           <div>
             <h1 className="text-2xl font-semibold text-[#F9FAFB]">
-              {execution.job_name ?? 'Execucao'}
+              {execution.job_name ?? 'Execução'}
             </h1>
             <div className="mt-0.5 flex items-center gap-2">
               <StatusBadge status={execution.status} variant="execution" />
@@ -290,12 +290,12 @@ export default function ExecutionDetail() {
         </div>
       </div>
 
-      {/* Card: Informacoes Gerais */}
+      {/* Card: Informações Gerais */}
       <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
         <div className="mb-4 flex items-center gap-2">
           <History className="size-5 text-[#6366F1]" />
           <h2 className="text-base font-semibold text-[#F9FAFB]">
-            Informacoes Gerais
+            Informações Gerais
           </h2>
         </div>
 
@@ -318,12 +318,12 @@ export default function ExecutionDetail() {
                     : 'bg-[#6366F1]/10 text-[#6366F1]'
                 }`}
               >
-                {execution.is_dry_run ? 'Dry Run' : 'Producao'}
+                {execution.is_dry_run ? 'Dry Run' : 'Produção'}
               </span>
             }
           />
           <InfoRow
-            label="Inicio"
+            label="Início"
             value={formatDateTimeFull(execution.started_at)}
           />
           <InfoRow
@@ -331,7 +331,7 @@ export default function ExecutionDetail() {
             value={formatDateTimeFull(execution.finished_at)}
           />
           <InfoRow
-            label="Duracao"
+            label="Duração"
             value={formatDuration(execution.duration_seconds)}
           />
           <InfoRow
@@ -365,10 +365,10 @@ export default function ExecutionDetail() {
           <div className="py-8 text-center">
             <Image className="mx-auto mb-2 size-8 text-[#6B7280]" />
             <p className="text-sm text-[#9CA3AF]">
-              Nenhum screenshot disponivel
+              Nenhum screenshot disponível
             </p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              Os screenshots aparecerao aqui apos a execucao ser concluida.
+              Os screenshots aparecerão aqui após a execução ser concluída.
             </p>
           </div>
         ) : (
@@ -436,9 +436,9 @@ export default function ExecutionDetail() {
                     size="sm"
                     onClick={handleNextScreenshot}
                     className="border-[#2E3348] bg-transparent text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white"
-                    aria-label="Proximo screenshot"
+                    aria-label="Próximo screenshot"
                   >
-                    Proximo
+                    Próximo
                     <ChevronRight className="size-4" />
                   </Button>
                 </div>
@@ -448,12 +448,12 @@ export default function ExecutionDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Secao: Relatorio PDF */}
+      {/* Secao: Relatório PDF */}
       <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
         <div className="mb-4 flex items-center gap-2">
           <FileDown className="size-5 text-[#22D3EE]" />
           <h2 className="text-base font-semibold text-[#F9FAFB]">
-            Relatorio PDF
+            Relatório PDF
           </h2>
         </div>
 
@@ -463,28 +463,28 @@ export default function ExecutionDetail() {
             className="bg-[#6366F1] text-sm font-medium text-white hover:bg-[#4F46E5]"
           >
             <Download className="size-4" />
-            Baixar Relatorio PDF
+            Baixar Relatório PDF
           </Button>
         ) : (
           <div className="py-4 text-center">
             <FileDown className="mx-auto mb-2 size-8 text-[#6B7280]" />
             <p className="text-sm text-[#9CA3AF]">
-              Nenhum relatorio PDF disponivel
+              Nenhum relatório PDF disponível
             </p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              O relatorio sera gerado automaticamente apos a analise da execucao.
+              O relatório será gerado automaticamente após a análise da execução.
             </p>
           </div>
         )}
       </div>
 
-      {/* Secao: Dados Extraidos */}
+      {/* Secao: Dados Extraídos */}
       <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Code className="size-5 text-[#10B981]" />
             <h2 className="text-base font-semibold text-[#F9FAFB]">
-              Dados Extraidos
+              Dados Extraídos
             </h2>
           </div>
 
@@ -515,10 +515,10 @@ export default function ExecutionDetail() {
           <div className="py-4 text-center">
             <Code className="mx-auto mb-2 size-8 text-[#6B7280]" />
             <p className="text-sm text-[#9CA3AF]">
-              Nenhum dado extraido disponivel
+              Nenhum dado extraído disponível
             </p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              Os dados serao extraidos apos a analise do LLM.
+              Os dados serão extraídos após a análise do LLM.
             </p>
           </div>
         ) : (
@@ -545,7 +545,7 @@ export default function ExecutionDetail() {
           <div className="flex items-center gap-2">
             <ScrollText className="size-5 text-[#F59E0B]" />
             <h2 className="text-base font-semibold text-[#F9FAFB]">
-              Logs de Execucao
+              Logs de Execução
             </h2>
           </div>
 
@@ -576,10 +576,10 @@ export default function ExecutionDetail() {
           <div className="py-4 text-center">
             <ScrollText className="mx-auto mb-2 size-8 text-[#6B7280]" />
             <p className="text-sm text-[#9CA3AF]">
-              Nenhum log disponivel
+              Nenhum log disponível
             </p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              Os logs serao gerados durante a execucao.
+              Os logs serão gerados durante a execução.
             </p>
           </div>
         ) : (
@@ -621,7 +621,7 @@ export default function ExecutionDetail() {
               Nenhuma entrega registrada
             </p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              As entregas aparecerao aqui apos a conclusao da execucao.
+              As entregas aparecerão aqui após a conclusão da execução.
             </p>
           </div>
         ) : (

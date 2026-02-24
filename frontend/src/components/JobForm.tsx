@@ -26,39 +26,88 @@ import { Separator } from '@/components/ui/separator';
 import { CronScheduleInput } from '@/components/CronScheduleInput';
 import { useCreateJob, useUpdateJob } from '@/hooks/useJobs';
 import { useProjects } from '@/hooks/useProjects';
+import { isValidCronExpression } from '@/utils/cronHelper';
+import { cn } from '@/lib/utils';
 import type { Job } from '@/types';
+
+// --- Funções auxiliares de validação ---
+
+/** Valida se uma string é JSON válido */
+function isValidJson(str: string): boolean {
+  if (!str.trim()) return true;
+  try {
+    const parsed = JSON.parse(str);
+    return typeof parsed === 'object' && parsed !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Valida lista de emails separados por vírgula */
+function validateEmailList(str: string): string | true {
+  const emails = str.split(',').map((e) => e.trim()).filter(Boolean);
+  if (emails.length === 0) return 'Informe pelo menos um destinatário';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const invalidEmails = emails.filter((e) => !emailRegex.test(e));
+  if (invalidEmails.length > 0) {
+    return `E-mail(s) inválido(s): ${invalidEmails.join(', ')}`;
+  }
+  return true;
+}
+
+/** Valida lista de URLs/endpoints para webhook */
+function validateWebhookList(str: string): string | true {
+  const urls = str.split(',').map((u) => u.trim()).filter(Boolean);
+  if (urls.length === 0) return 'Informe pelo menos uma URL';
+  const urlRegex = /^https?:\/\/.+/i;
+  const invalidUrls = urls.filter((u) => !urlRegex.test(u));
+  if (invalidUrls.length > 0) {
+    return `URL(s) inválida(s): ${invalidUrls.join(', ')}. Use http:// ou https://`;
+  }
+  return true;
+}
 
 // --- Schema de validação ---
 
 const deliveryConfigSchema = z.object({
   channel_type: z.enum(['email', 'onedrive', 'webhook'], {
-    error: 'Tipo de canal e obrigatorio',
+    error: 'Tipo de canal é obrigatório',
   }),
   recipients: z
-    .string({ error: 'Destinatarios sao obrigatorios' })
-    .min(1, 'Informe pelo menos um destinatario'),
+    .string({ error: 'Destinatários são obrigatórios' })
+    .min(1, 'Informe pelo menos um destinatário'),
   is_active: z.boolean().optional(),
 });
 
 const jobFormSchema = z.object({
   project_id: z
-    .string({ error: 'Projeto e obrigatorio' })
+    .string({ error: 'Projeto é obrigatório' })
     .min(1, 'Selecione um projeto'),
   name: z
-    .string({ error: 'Nome e obrigatorio' })
+    .string({ error: 'Nome é obrigatório' })
     .min(3, 'Nome deve ter pelo menos 3 caracteres'),
   cron_expression: z
-    .string({ error: 'Expressao cron e obrigatoria' })
-    .min(1, 'Expressao cron e obrigatoria')
+    .string({ error: 'Expressão cron é obrigatória' })
+    .min(1, 'Expressão cron é obrigatória')
     .regex(
       /^(\S+\s+){4}\S+$/,
-      'Expressao cron invalida. Use o formato: minuto hora dia mes dia_semana'
+      'Expressão cron inválida. Use o formato: minuto hora dia mês dia_semana'
+    )
+    .refine(
+      (val) => isValidCronExpression(val),
+      'Expressão cron inválida. Verifique os valores informados.'
     ),
   agent_prompt: z
-    .string({ error: 'Prompt e obrigatorio' })
+    .string({ error: 'Prompt é obrigatório' })
     .min(10, 'Prompt deve ter pelo menos 10 caracteres'),
   prompt_template_id: z.string().optional(),
-  execution_params: z.string().optional(),
+  execution_params: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || isValidJson(val),
+      'JSON inválido. Verifique a sintaxe do JSON.'
+    ),
   delivery_configs: z.array(deliveryConfigSchema).optional(),
 });
 
@@ -121,6 +170,8 @@ const JobForm = memo(function JobForm({
     handleSubmit,
     control,
     reset,
+    setError,
+    watch,
     formState: { errors },
   } = useForm<JobFormData>({
     resolver: zodResolver(jobFormSchema),
@@ -151,15 +202,36 @@ const JobForm = memo(function JobForm({
   // Callback de submissao
   const onSubmit = useCallback(
     async (data: JobFormData) => {
+      // Valida destinatários de entrega por tipo de canal
+      if (data.delivery_configs && data.delivery_configs.length > 0) {
+        for (let i = 0; i < data.delivery_configs.length; i++) {
+          const dc = data.delivery_configs[i];
+          if (dc.channel_type === 'email') {
+            const result = validateEmailList(dc.recipients);
+            if (result !== true) {
+              setError(`delivery_configs.${i}.recipients`, {
+                type: 'manual',
+                message: result,
+              });
+              return;
+            }
+          } else if (dc.channel_type === 'webhook') {
+            const result = validateWebhookList(dc.recipients);
+            if (result !== true) {
+              setError(`delivery_configs.${i}.recipients`, {
+                type: 'manual',
+                message: result,
+              });
+              return;
+            }
+          }
+        }
+      }
+
       // Monta o payload para a API
       let executionParams: Record<string, unknown> | undefined;
       if (data.execution_params) {
-        try {
-          executionParams = JSON.parse(data.execution_params);
-        } catch {
-          // JSON invalido - sera tratado na validacao
-          return;
-        }
+        executionParams = JSON.parse(data.execution_params);
       }
 
       const payload = {
@@ -191,7 +263,7 @@ const JobForm = memo(function JobForm({
         // Erro ja tratado no hook (toast)
       }
     },
-    [isEditing, job, createMutation, updateMutation, onOpenChange]
+    [isEditing, job, createMutation, updateMutation, onOpenChange, setError]
   );
 
   return (
@@ -203,8 +275,8 @@ const JobForm = memo(function JobForm({
           </DialogTitle>
           <DialogDescription className="text-sm text-[#9CA3AF]">
             {isEditing
-              ? 'Atualize as configuracoes do job.'
-              : 'Configure um novo job de automacao.'}
+              ? 'Atualize as configurações do job.'
+              : 'Configure um novo job de automação.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -212,7 +284,7 @@ const JobForm = memo(function JobForm({
           {/* Secao: Dados basicos */}
           <div>
             <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-[#9CA3AF]">
-              Dados Basicos
+              Dados Básicos
             </h3>
             <div className="space-y-4">
               {/* Projeto */}
@@ -269,10 +341,13 @@ const JobForm = memo(function JobForm({
                 </Label>
                 <Input
                   id="job_name"
-                  placeholder="Ex: Captura diaria de relatorio"
+                  placeholder="Ex: Captura diária de relatório"
                   aria-invalid={errors.name ? 'true' : 'false'}
                   aria-describedby={errors.name ? 'name-error' : undefined}
-                  className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                  className={cn(
+                    'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                    errors.name && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                  )}
                   {...register('name')}
                 />
                 {errors.name && (
@@ -319,13 +394,16 @@ const JobForm = memo(function JobForm({
                 </Label>
                 <Textarea
                   id="agent_prompt"
-                  placeholder="Descreva as instrucoes para o agente de IA. Ex: Navegue ate a pagina de relatorios, capture screenshots e analise os dados..."
+                  placeholder="Descreva as instruções para o agente de IA. Ex: Navegue até a página de relatórios, capture screenshots e analise os dados..."
                   rows={5}
                   aria-invalid={errors.agent_prompt ? 'true' : 'false'}
                   aria-describedby={
                     errors.agent_prompt ? 'prompt-error' : undefined
                   }
-                  className="border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                  className={cn(
+                    'border-[#2E3348] bg-[#242838] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                    errors.agent_prompt && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                  )}
                   {...register('agent_prompt')}
                 />
                 {errors.agent_prompt && (
@@ -345,18 +423,35 @@ const JobForm = memo(function JobForm({
                   htmlFor="execution_params"
                   className="mb-1.5 text-sm font-medium text-[#F9FAFB]"
                 >
-                  Parametros de Execucao (JSON)
+                  Parâmetros de Execução (JSON)
                 </Label>
                 <Textarea
                   id="execution_params"
                   placeholder='{"chave": "valor"}'
                   rows={3}
-                  className="border-[#2E3348] bg-[#242838] font-mono text-sm text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                  aria-invalid={errors.execution_params ? 'true' : 'false'}
+                  aria-describedby={
+                    errors.execution_params ? 'exec-params-error' : undefined
+                  }
+                  className={cn(
+                    'border-[#2E3348] bg-[#242838] font-mono text-sm text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                    errors.execution_params && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                  )}
                   {...register('execution_params')}
                 />
-                <p className="mt-1 text-xs text-[#6B7280]">
-                  Opcional. JSON com parametros extras para a execucao.
-                </p>
+                {errors.execution_params ? (
+                  <p
+                    id="exec-params-error"
+                    className="mt-1 text-xs text-[#EF4444]"
+                    role="alert"
+                  >
+                    {errors.execution_params.message}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-[#6B7280]">
+                    Opcional. JSON com parâmetros extras para a execução.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -384,10 +479,10 @@ const JobForm = memo(function JobForm({
             {fields.length === 0 && (
               <div className="rounded-lg border border-dashed border-[#2E3348] p-6 text-center">
                 <p className="text-sm text-[#6B7280]">
-                  Nenhum canal de entrega configurado.
+                  Nenhum canal de entrega configurado
                 </p>
                 <p className="mt-1 text-xs text-[#6B7280]">
-                  Adicione um canal para receber os resultados da execucao.
+                  Adicione um canal para receber os resultados da execução.
                 </p>
               </div>
             )}
@@ -470,16 +565,27 @@ const JobForm = memo(function JobForm({
                     {/* Destinatarios */}
                     <div>
                       <Label className="mb-1.5 text-xs font-medium text-[#9CA3AF]">
-                        Destinatarios
+                        {watch(`delivery_configs.${index}.channel_type`) === 'webhook'
+                          ? 'URLs de Webhook'
+                          : 'Destinatários'}
                       </Label>
                       <Input
-                        placeholder="email1@exemplo.com, email2@exemplo.com"
-                        className="border-[#2E3348] bg-[#1A1D2E] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]"
+                        placeholder={
+                          watch(`delivery_configs.${index}.channel_type`) === 'webhook'
+                            ? 'https://api.exemplo.com/webhook'
+                            : watch(`delivery_configs.${index}.channel_type`) === 'email'
+                              ? 'email1@exemplo.com, email2@exemplo.com'
+                              : 'pasta/destino'
+                        }
+                        className={cn(
+                          'border-[#2E3348] bg-[#1A1D2E] text-[#F9FAFB] placeholder-[#6B7280] focus:border-[#6366F1] focus:ring-[#6366F1]',
+                          errors.delivery_configs?.[index]?.recipients && 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]'
+                        )}
                         {...register(
                           `delivery_configs.${index}.recipients`
                         )}
                       />
-                      {errors.delivery_configs?.[index]?.recipients && (
+                      {errors.delivery_configs?.[index]?.recipients ? (
                         <p
                           className="mt-1 text-xs text-[#EF4444]"
                           role="alert"
@@ -489,10 +595,15 @@ const JobForm = memo(function JobForm({
                               ?.message
                           }
                         </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-[#6B7280]">
+                          {watch(`delivery_configs.${index}.channel_type`) === 'email'
+                            ? 'Separe múltiplos e-mails com vírgula.'
+                            : watch(`delivery_configs.${index}.channel_type`) === 'webhook'
+                              ? 'Informe a URL do webhook para receber os resultados.'
+                              : 'Separe múltiplos destinatários com vírgula.'}
+                        </p>
                       )}
-                      <p className="mt-1 text-xs text-[#6B7280]">
-                        Separe multiplos destinatarios com virgula.
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -521,7 +632,7 @@ const JobForm = memo(function JobForm({
                   Salvando...
                 </>
               ) : isEditing ? (
-                'Salvar Alteracoes'
+                'Salvar Alterações'
               ) : (
                 'Criar Job'
               )}

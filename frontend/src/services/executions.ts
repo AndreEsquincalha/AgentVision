@@ -51,22 +51,24 @@ export async function getExecution(id: string): Promise<ExecutionDetail> {
 
 /**
  * Busca as URLs presigned dos screenshots de uma execucao.
+ * A API retorna { execution_id, urls: string[] }, extraimos apenas as URLs.
  */
 export async function getScreenshots(id: string): Promise<string[]> {
-  const response = await api.get<string[]>(
+  const response = await api.get<{ execution_id: string; urls: string[] }>(
     API_ENDPOINTS.EXECUTIONS.SCREENSHOTS(id)
   );
-  return response.data;
+  return response.data?.urls ?? [];
 }
 
 /**
  * Busca a URL presigned do PDF de uma execucao.
+ * A API retorna { execution_id, url: string }, extraimos apenas a URL.
  */
 export async function getPdfUrl(id: string): Promise<string> {
-  const response = await api.get<string>(
+  const response = await api.get<{ execution_id: string; url: string }>(
     API_ENDPOINTS.EXECUTIONS.PDF(id)
   );
-  return response.data;
+  return response.data?.url ?? '';
 }
 
 /**

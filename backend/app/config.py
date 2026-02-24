@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     # MinIO (S3-compatible)
     # -------------------------------------------------------------------------
     minio_endpoint: str = 'localhost:9000'
+    minio_public_endpoint: str = ''
     minio_access_key: str = 'minioadmin'
     minio_secret_key: str = 'minioadmin_secret_password'
     minio_bucket: str = 'agentvision'

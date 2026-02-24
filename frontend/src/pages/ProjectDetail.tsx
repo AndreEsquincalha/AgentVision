@@ -9,7 +9,7 @@ import {
   KeyRound,
   CheckCircle2,
   XCircle,
-  Briefcase,
+  CalendarClock,
 } from 'lucide-react';
 import { useProject, useDeleteProject } from '@/hooks/useProjects';
 import { ProjectForm } from '@/components/ProjectForm';
@@ -301,14 +301,14 @@ export default function ProjectDetail() {
         {/* Card: Jobs Associados (placeholder) */}
         <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
           <div className="mb-4 flex items-center gap-2">
-            <Briefcase className="size-5 text-[#F59E0B]" />
+            <CalendarClock className="size-5 text-[#F59E0B]" />
             <h2 className="text-base font-semibold text-[#F9FAFB]">
               Jobs Associados
             </h2>
           </div>
 
           <div className="py-6 text-center">
-            <Briefcase className="mx-auto mb-2 size-8 text-[#6B7280]" />
+            <CalendarClock className="mx-auto mb-2 size-8 text-[#6B7280]" />
             <p className="text-sm text-[#9CA3AF]">
               Nenhum job associado ainda
             </p>

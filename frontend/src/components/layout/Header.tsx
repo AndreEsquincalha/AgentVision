@@ -51,13 +51,16 @@ function getInitials(name: string): string {
 interface HeaderProps {
   /** Classes CSS adicionais */
   className?: string;
+  /** Se está em modo mobile */
+  isMobile?: boolean;
 }
 
 /**
  * Header fixo no topo da área de conteúdo.
  * Exibe o título dinâmico da página e informações do usuário.
+ * Em mobile, adiciona padding à esquerda para o botão hamburger.
  */
-const Header = memo(function Header({ className }: HeaderProps) {
+const Header = memo(function Header({ className, isMobile = false }: HeaderProps) {
   const location = useLocation();
   const { user } = useAuth();
 
@@ -74,17 +77,18 @@ const Header = memo(function Header({ className }: HeaderProps) {
   return (
     <header
       className={cn(
-        'sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#2E3348] bg-[#0F1117]/80 px-8 backdrop-blur-sm',
+        'sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#2E3348] bg-[#0F1117]/80 px-4 backdrop-blur-sm sm:px-6 lg:px-8',
+        isMobile && 'pl-16',
         className
       )}
     >
       {/* Título da página */}
-      <h2 className="text-xl font-semibold text-[#F9FAFB]">{pageTitle}</h2>
+      <h2 className="truncate text-lg font-semibold text-[#F9FAFB] sm:text-xl">{pageTitle}</h2>
 
       {/* Informações do usuário */}
       {user && (
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-[#9CA3AF]">{user.name}</span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="hidden text-sm text-[#9CA3AF] sm:inline">{user.name}</span>
           <div
             className="flex size-8 items-center justify-center rounded-full bg-[#6366F1]/20 text-xs font-medium text-[#6366F1]"
             aria-label={`Avatar de ${user.name}`}

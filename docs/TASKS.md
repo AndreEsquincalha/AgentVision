@@ -816,24 +816,24 @@
 
 #### 9.1 Integração End-to-End
 
-- [ ] **9.1.1** Testar fluxo completo manualmente: criar projeto → criar job → dry run
+- [X] **9.1.1** Testar fluxo completo manualmente: criar projeto → criar job → dry run
   - Verificar que o agente navega corretamente
   - Verificar screenshots capturados
   - Verificar análise da LLM
   - Verificar PDF gerado
   - Verificar dados no banco e MinIO
 
-- [ ] **9.1.2** Testar fluxo de agendamento: ativar job → aguardar execução automática
+- [X] **9.1.2** Testar fluxo de agendamento: ativar job → aguardar execução automática
   - Verificar que Celery Beat dispara no horário correto
   - Verificar que o worker executa a task
   - Verificar que a entrega por email é feita
 
-- [ ] **9.1.3** Testar fluxo de entrega: execução completa → email enviado
+- [X] **9.1.3** Testar fluxo de entrega: execução completa → email enviado
   - Configurar SMTP via Settings
   - Verificar email recebido com PDF anexo
   - Verificar DeliveryLog com status "sent"
 
-- [ ] **9.1.4** Testar fluxo de erros: simular falha em cada etapa
+- [X] **9.1.4** Testar fluxo de erros: simular falha em cada etapa
   - Falha de navegação (URL inválida)
   - Falha de LLM (API key inválida)
   - Falha de entrega (SMTP inválido)
@@ -842,21 +842,21 @@
 
 #### 9.2 Refinamentos de UX
 
-- [ ] **9.2.1** Adicionar feedback visual para ações assíncronas
+- [X] **9.2.1** Adicionar feedback visual para ações assíncronas
   - Toast de sucesso/erro em operações CRUD
   - Loading states em todos os botões de ação
   - Indicador de progresso em dry run (polling de status)
 
-- [ ] **9.2.2** Adicionar empty states informativos em todas as páginas
+- [X] **9.2.2** Adicionar empty states informativos em todas as páginas
   - Mensagem amigável quando não há dados
   - Call-to-action relevante (ex: "Crie seu primeiro projeto")
 
-- [ ] **9.2.3** Adicionar responsividade ao layout
+- [X] **9.2.3** Adicionar responsividade ao layout
   - Sidebar colapsada automaticamente em telas pequenas
   - Tabelas com scroll horizontal em mobile
   - Cards empilhados em mobile
 
-- [ ] **9.2.4** Adicionar validações completas nos formulários
+- [X] **9.2.4** Adicionar validações completas nos formulários
   - Validação de cron expression com feedback (próxima execução)
   - Validação de URL
   - Validação de JSON (parâmetros de execução)
@@ -865,26 +865,26 @@
 
 #### 9.3 Polimento e Ajustes Finais
 
-- [ ] **9.3.1** Revisar todas as telas seguindo o design system
+- [X] **9.3.1** Revisar todas as telas seguindo o design system
   - Consistência de espaçamento, cores, tipografia
   - Transições e micro-interações
   - Foco em acessibilidade básica (contraste, focus visible)
 
-- [ ] **9.3.2** Configurar README.md com instruções de setup
+- [X] **9.3.2** Configurar README.md com instruções de setup
   - Pré-requisitos (Docker, Docker Compose)
   - Passos para setup inicial
   - Variáveis de ambiente necessárias
   - Como executar o seed
   - Como acessar o frontend e MinIO console
 
-- [ ] **9.3.3** Revisar e otimizar docker-compose.yml final
+- [X] **9.3.3** Revisar e otimizar docker-compose.yml final
   - Volumes persistentes
   - Health checks em todos os serviços
   - Restart policies
   - Limites de memória (se aplicável)
   - Logs configurados
 
-- [ ] **9.3.4** Revisar segurança
+- [X] **9.3.4** Revisar segurança
   - Verificar que credenciais não estão expostas em logs
   - Verificar CORS
   - Verificar expiração de tokens

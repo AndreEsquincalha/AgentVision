@@ -50,6 +50,13 @@ postgres_data/
 # Redis data
 redis_data/
 
+# Celery Beat schedule files
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal
+celerybeat-schedule.*
+backend/celerybeat-schedule*
+
 # Logs
 *.log
 

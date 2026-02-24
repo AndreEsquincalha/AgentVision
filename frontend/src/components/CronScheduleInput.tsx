@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Controller, type Control } from 'react-hook-form';
-import { CalendarClock, Code } from 'lucide-react';
+import { CalendarClock, Code, CheckCircle2, XCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ import {
   buildCronExpression,
   parseCronToState,
   getNextCronExecutions,
+  isValidCronExpression,
   type CronScheduleState,
   type CronPreset,
 } from '@/utils/cronHelper';
@@ -109,6 +110,7 @@ function CronScheduleInputInner({
       return;
     }
     const parsed = parseCronToState(value);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- necessario para sincronizar estado controlado externamente
     setState(parsed);
     if (parsed.preset === 'custom') {
       setCustomCron(value);
@@ -187,14 +189,14 @@ function CronScheduleInputInner({
       {/* Select de preset */}
       <div>
         <Label className="mb-1.5 text-sm font-medium text-[#F9FAFB]">
-          Frequencia *
+          Frequência *
         </Label>
         <Select value={state.preset} onValueChange={handlePresetChange}>
           <SelectTrigger
             className={selectTriggerClass}
             aria-invalid={error ? 'true' : 'false'}
           >
-            <SelectValue placeholder="Selecione a frequencia" />
+            <SelectValue placeholder="Selecione a frequência" />
           </SelectTrigger>
           <SelectContent className={selectContentClass}>
             {Object.entries(PRESET_GROUPS).map(([group, presets]) => (
@@ -329,11 +331,11 @@ function CronScheduleInputInner({
           </div>
         )}
 
-        {/* Dia do mes (monthly) */}
+        {/* Dia do mês (monthly) */}
         {state.preset === 'monthly' && (
           <div className="min-w-[120px]">
             <Label className="mb-1.5 text-xs font-medium text-[#9CA3AF]">
-              Dia do mes
+              Dia do mês
             </Label>
             <Select
               value={state.dayOfMonth}
@@ -361,7 +363,7 @@ function CronScheduleInputInner({
         {state.preset === 'custom' && (
           <div className="w-full">
             <Label className="mb-1.5 text-xs font-medium text-[#9CA3AF]">
-              Expressao Cron
+              Expressão Cron
             </Label>
             <Input
               value={customCron}
@@ -384,14 +386,25 @@ function CronScheduleInputInner({
         </p>
       )}
 
-      {/* Badge com expressao cron + texto legivel */}
+      {/* Badge com expressao cron + texto legivel + indicador de validade */}
       {cronExpression && (
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="border-[#2E3348] bg-[#242838] font-mono text-xs text-[#9CA3AF]">
             <Code className="size-3" />
             {cronExpression}
           </Badge>
-          {cronReadable !== cronExpression && (
+          {isValidCronExpression(cronExpression) ? (
+            <span className="flex items-center gap-1 text-xs text-[#10B981]">
+              <CheckCircle2 className="size-3" />
+              Válido
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-[#EF4444]">
+              <XCircle className="size-3" />
+              Inválido
+            </span>
+          )}
+          {cronReadable !== cronExpression && isValidCronExpression(cronExpression) && (
             <span className="text-xs text-[#6B7280]">{cronReadable}</span>
           )}
         </div>
@@ -403,7 +416,7 @@ function CronScheduleInputInner({
           <div className="mb-2 flex items-center gap-1.5">
             <CalendarClock className="size-3.5 text-[#6366F1]" />
             <span className="text-xs font-medium text-[#9CA3AF]">
-              Proximas execucoes
+              Próximas execuções
             </span>
           </div>
           <ul className="space-y-1">
