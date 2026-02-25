@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Float, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.models import SoftDeleteModel
@@ -69,6 +70,18 @@ class Project(SoftDeleteModel):
         Integer,
         nullable=False,
         default=120,
+    )
+
+    # --- Sandbox / Seguranca ---
+    allowed_domains: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+    )
+    blocked_urls: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
     )
 
     # --- Status ---

@@ -230,6 +230,8 @@ class ProjectService:
             'llm_temperature': data.llm_temperature,
             'llm_max_tokens': data.llm_max_tokens,
             'llm_timeout': data.llm_timeout,
+            'allowed_domains': data.allowed_domains,
+            'blocked_urls': data.blocked_urls,
         }
 
         # Criptografa credenciais se fornecidas
@@ -262,7 +264,7 @@ class ProjectService:
         simple_fields = [
             'name', 'base_url', 'description', 'llm_provider',
             'llm_model', 'llm_temperature', 'llm_max_tokens',
-            'llm_timeout', 'is_active',
+            'llm_timeout', 'is_active', 'allowed_domains', 'blocked_urls',
         ]
 
         for field in simple_fields:

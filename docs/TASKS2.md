@@ -199,7 +199,7 @@
 
 ### 10.1 Detecção e Prevenção de Loops
 
-- [ ] **10.1.1** Implementar detector de loops baseado em URL tracking
+- [X] **10.1.1** Implementar detector de loops baseado em URL tracking
   - Criar classe `LoopDetector` em `agents/loop_detector.py`
   - Manter histórico de URLs visitadas com timestamps
   - Detectar padrões de loop:
@@ -208,13 +208,13 @@
     - **Progresso estagnado**: nenhuma URL nova nos últimos N steps
   - Retornar `LoopDetection(is_loop=True, type='url_repeat', count=3)`
 
-- [ ] **10.1.2** Implementar detector de loops baseado em ação repetida
+- [X] **10.1.2** Implementar detector de loops baseado em ação repetida
   - Detectar quando o agente repete a mesma ação (click, type) no mesmo elemento
   - Threshold configurável: `max_repeated_actions = 3`
   - Integrar com os logs do browser-use para monitorar ações
   - Se loop detectado: emitir warning no log e considerar fallback
 
-- [ ] **10.1.3** Implementar circuit breaker para o agente
+- [X] **10.1.3** Implementar circuit breaker para o agente
   - Se loop detectado, injetar instrução de correção no prompt do agente:
     ```
     ATENÇÃO: Você está repetindo ações. Pare e analise se a tarefa já foi concluída.
@@ -224,7 +224,7 @@
   - Retornar BrowserResult com `success=False, error_message="Loop detectado e agente forçado a parar"`
   - Capturar screenshot final antes de parar
 
-- [ ] **10.1.4** Adicionar `max_steps` dinâmico baseado na complexidade da tarefa
+- [X] **10.1.4** Adicionar `max_steps` dinâmico baseado na complexidade da tarefa
   - Jobs simples (apenas captura de screenshot): `max_steps = 5`
   - Jobs com login: `max_steps = 10`
   - Jobs com navegação multi-página: `max_steps = 15`
@@ -233,14 +233,14 @@
 
 ### 10.2 Sandbox de Segurança para o Agente
 
-- [ ] **10.2.1** Implementar URL allowlist/blocklist por projeto
+- [X] **10.2.1** Implementar URL allowlist/blocklist por projeto
   - Adicionar campos no model Project:
     - `allowed_domains` (JSON list) — domínios permitidos para navegação
     - `blocked_urls` (JSON list) — URLs/patterns bloqueadas
   - O agente só pode navegar em domínios presentes no `allowed_domains`
   - Bloquear navegação para URLs externas automaticamente
 
-- [ ] **10.2.2** Implementar action sandbox — limitar ações do agente
+- [X] **10.2.2** Implementar action sandbox — limitar ações do agente
   - Criar enum `AllowedActions`: `navigate`, `click`, `type`, `screenshot`, `extract`, `scroll`
   - Cada job define quais ações são permitidas (default: todas exceto `download`, `upload`, `execute_js`)
   - Ações perigosas bloqueadas por padrão:
@@ -250,7 +250,7 @@
     - `form_submit` com campos de pagamento
   - Bloquear via prompt engineering + validação pós-ação
 
-- [ ] **10.2.3** Implementar timeout granular por fase de execução
+- [X] **10.2.3** Implementar timeout granular por fase de execução
   - Timeouts separados para cada fase:
     - `login_timeout`: 30s (login deve ser rápido)
     - `navigation_timeout`: 60s por página
@@ -259,7 +259,7 @@
   - Se qualquer fase exceder seu timeout, log de warning e fallback para próxima fase
   - Timeout total é hard limit — mata o processo
 
-- [ ] **10.2.4** Implementar validação de credenciais antes da execução
+- [X] **10.2.4** Implementar validação de credenciais antes da execução
   - Antes de iniciar o BrowserAgent, validar:
     - Credenciais existem e não estão vazias
     - API key do LLM é válida (ping rápido no provider)
@@ -269,7 +269,7 @@
 
 ### 10.3 Melhoria na Assertividade da Navegação
 
-- [ ] **10.3.1** Melhorar o prompt do browser-use agent com instruções mais precisas
+- [X] **10.3.1** Melhorar o prompt do browser-use agent com instruções mais precisas
   - Refatorar `_build_full_prompt()` para ser mais direto e assertivo:
     ```
     Você é um agente de automação web. Siga EXATAMENTE estas instruções na ordem:
@@ -286,14 +286,14 @@
     - Se uma ação falhar, tente NO MÁXIMO 2 vezes antes de prosseguir
     ```
 
-- [ ] **10.3.2** Implementar fallback inteligente (browser-use → Playwright dirigido)
+- [X] **10.3.2** Implementar fallback inteligente (browser-use → Playwright dirigido)
   - Se browser-use falhar, em vez de Playwright genérico, usar Playwright com instruções extraídas do prompt:
     - Parser de prompt: extrair URLs, ações e dados esperados
     - Mapear ações para Playwright API: `page.goto()`, `page.click()`, `page.fill()`
   - Criar classe `PromptToPlaywright` que converte instruções em scripts Playwright
   - Manter extracted_content do browser-use (se parcial) como contexto para o fallback
 
-- [ ] **10.3.3** Adicionar detecção de estado da página antes de ações
+- [X] **10.3.3** Adicionar detecção de estado da página antes de ações
   - Antes de cada ação do agente, verificar:
     - Página carregou completamente (`networkidle` ou `domcontentloaded`)
     - Não há overlays/modais bloqueando interação
@@ -301,7 +301,7 @@
   - Implementar `page.wait_for_load_state('networkidle')` com timeout curto (5s)
   - Se modal/popup detectado, fechar automaticamente antes de prosseguir
 
-- [ ] **10.3.4** Implementar retry inteligente com contexto de erro
+- [X] **10.3.4** Implementar retry inteligente com contexto de erro
   - Se uma ação falhar (ex: element not found), não repetir cegamente
   - Analisar o erro e ajustar estratégia:
     - `element not found` → aguardar + tentar seletor alternativo

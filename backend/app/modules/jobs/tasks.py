@@ -320,6 +320,55 @@ class _HeartbeatThread:
 
 
 # ---------------------------------------------------------------------------
+# Helper: Calculo dinamico de max_steps baseado na complexidade
+# ---------------------------------------------------------------------------
+
+def _calculate_max_steps(
+    prompt: str,
+    credentials: dict | None,
+    exec_params: dict,
+) -> int:
+    """
+    Calcula max_steps dinamico baseado na complexidade da tarefa.
+
+    Se o usuario definiu explicitamente max_steps nos parametros
+    de execucao, esse valor e respeitado. Caso contrario, aplica
+    heuristicas baseadas no prompt e contexto da execucao.
+
+    Args:
+        prompt: Prompt do agente (usado para detectar complexidade).
+        credentials: Credenciais de acesso (indica necessidade de login).
+        exec_params: Parametros de execucao do job.
+
+    Returns:
+        Numero de max_steps calculado.
+    """
+    # Se o usuario definiu explicitamente, respeitar
+    explicit_max_steps = exec_params.get('max_steps')
+    if explicit_max_steps:
+        return int(explicit_max_steps)
+
+    has_login = credentials is not None
+    has_additional_urls = bool(exec_params.get('urls'))
+    prompt_lower = prompt.lower()
+
+    # Heuristicas de complexidade baseadas em palavras-chave do prompt
+    is_complex = any(kw in prompt_lower for kw in [
+        'extrair', 'extract', 'preencher', 'fill', 'formulario', 'form',
+        'tabela', 'table', 'dados', 'data', 'buscar', 'search',
+    ])
+
+    if is_complex:
+        return 25
+    elif has_login and has_additional_urls:
+        return 15
+    elif has_login:
+        return 10
+    else:
+        return 5
+
+
+# ---------------------------------------------------------------------------
 # Task principal: execute_job
 # ---------------------------------------------------------------------------
 
@@ -567,6 +616,65 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             logger.warning('Falha ao carregar config LLM do projeto %s: %s', project_id, str(e))
 
         # -----------------------------------------------------------------
+        # 4.5. Validacao pre-execucao
+        # -----------------------------------------------------------------
+        from app.modules.agents.execution_validator import ExecutionValidator
+
+        validation = ExecutionValidator.validate(
+            base_url=project_base_url,
+            credentials=credentials,
+            llm_config=llm_config,
+        )
+
+        for warning in validation.warnings:
+            all_logs.append(f'Aviso de validacao: {warning}')
+
+        if not validation.is_valid:
+            for error in validation.errors:
+                all_logs.append(f'Erro de validacao: {error}')
+
+            logger.warning(
+                'Validacao pre-execucao falhou para job %s: %s',
+                job_id, '; '.join(validation.errors),
+            )
+
+            # Atualiza execution para failed
+            finished_at = utc_now()
+            duration_seconds = (
+                int((finished_at - started_at).total_seconds())
+                if started_at
+                else None
+            )
+
+            execution_repo.update_status(
+                execution_id=execution_id,
+                status='failed',
+                logs='\n'.join(all_logs),
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+            )
+
+            return {
+                'success': False,
+                'execution_id': str(execution_id),
+                'job_id': job_id,
+                'error': 'Validacao pre-execucao falhou: ' + '; '.join(validation.errors),
+            }
+
+        all_logs.append('Validacao pre-execucao aprovada')
+
+        # -----------------------------------------------------------------
+        # 4.6. Calcula max_steps dinamico baseado na complexidade
+        # -----------------------------------------------------------------
+        exec_params_dict = dict(job_execution_params or {})
+        calculated_max_steps = _calculate_max_steps(
+            prompt=job_agent_prompt,
+            credentials=credentials,
+            exec_params=exec_params_dict,
+        )
+        all_logs.append(f'max_steps calculado: {calculated_max_steps}')
+
+        # -----------------------------------------------------------------
         # 5. Inicializa e executa o BrowserAgent
         # -----------------------------------------------------------------
         all_logs.append('Iniciando agente de navegacao...')
@@ -583,6 +691,7 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         # Monta os parametros de execucao, incluindo config do LLM
         # para que o browser-use possa usar o agente inteligente
         exec_params = dict(job_execution_params or {})
+        exec_params['max_steps'] = calculated_max_steps
         if llm_config.get('api_key'):
             exec_params['llm_config'] = {
                 'provider': llm_config.get('provider'),

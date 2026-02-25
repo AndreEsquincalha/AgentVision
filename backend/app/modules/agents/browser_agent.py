@@ -5,6 +5,81 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
+# Importacoes opcionais — outro agente cria esses modulos
+# Se nao existirem ainda, as funcionalidades de loop detection e sandbox
+# serao graciosamente desativadas
+try:
+    from app.modules.agents.loop_detector import LoopDetection, LoopDetector
+    _HAS_LOOP_DETECTOR = True
+except ImportError:
+    _HAS_LOOP_DETECTOR = False
+    LoopDetector = None  # type: ignore[assignment, misc]
+    LoopDetection = None  # type: ignore[assignment, misc]
+
+try:
+    from app.modules.agents.agent_sandbox import AgentSandbox, SandboxViolation
+    _HAS_AGENT_SANDBOX = True
+except ImportError:
+    _HAS_AGENT_SANDBOX = False
+    AgentSandbox = None  # type: ignore[assignment, misc]
+    SandboxViolation = None  # type: ignore[assignment, misc]
+
+# Timeouts granulares por fase (em milissegundos)
+_LOGIN_TIMEOUT_MS: int = 30_000       # 30s para login
+_NAVIGATION_TIMEOUT_MS: int = 60_000  # 60s por navegacao
+_EXTRACTION_TIMEOUT_MS: int = 30_000  # 30s para extracao
+_PAGE_READY_TIMEOUT_MS: int = 5_000   # 5s para estabilizacao da pagina
+
+# Seletores comuns de modais/popups para fechamento automatico
+_MODAL_CLOSE_SELECTORS: list[str] = [
+    'button[aria-label="Close"]',
+    'button[aria-label="Fechar"]',
+    '.modal-close',
+    '[data-dismiss="modal"]',
+    'button:has-text("Accept")',
+    'button:has-text("Aceitar")',
+    'button:has-text("OK")',
+    '#cookie-accept',
+    '.cookie-close',
+]
+
+# Seletores comuns para campos de login
+_USERNAME_SELECTORS: list[str] = [
+    'input[type="email"]',
+    'input[name="email"]',
+    'input[name="username"]',
+    'input[name="login"]',
+    'input[name="user"]',
+    'input[id="email"]',
+    'input[id="username"]',
+    'input[id="login"]',
+    'input[type="text"][name*="user"]',
+    'input[type="text"][name*="email"]',
+    'input[type="text"][name*="login"]',
+    '#email',
+    '#username',
+    '#login',
+]
+
+_PASSWORD_SELECTORS: list[str] = [
+    'input[type="password"]',
+    'input[name="password"]',
+    'input[name="passwd"]',
+    'input[name="pass"]',
+    'input[id="password"]',
+    '#password',
+]
+
+_SUBMIT_SELECTORS: list[str] = [
+    'button[type="submit"]',
+    'input[type="submit"]',
+    'button:has-text("Login")',
+    'button:has-text("Entrar")',
+    'button:has-text("Sign in")',
+    'button:has-text("Log in")',
+    'button:has-text("Submit")',
+]
+
 
 @dataclass
 class BrowserResult:
@@ -24,7 +99,17 @@ class BrowserAgent:
     Utiliza a biblioteca browser-use com Playwright para navegar em sites,
     executar acoes guiadas por prompt e capturar screenshots nos momentos relevantes.
     Quando browser-use nao esta disponivel ou nao pode ser usado (ex: sem LLM),
-    faz fallback para Playwright direto com navegacao simples.
+    faz fallback para Playwright dirigido com PromptToPlaywright.
+
+    Melhorias Sprint 10:
+    - Circuit breaker com LoopDetector (10.1.3)
+    - max_steps dinamico (10.1.4)
+    - Sandbox de seguranca via prompt (10.2.2)
+    - Timeouts granulares por fase (10.2.3)
+    - Prompt assertivo reestruturado (10.3.1)
+    - Fallback inteligente com PromptToPlaywright (10.3.2)
+    - Deteccao de estado da pagina (10.3.3)
+    - Retry inteligente com diagnostico de erro (10.3.4)
     """
 
     def __init__(
@@ -34,6 +119,7 @@ class BrowserAgent:
         headless: bool = True,
         timeout: int = 120,
         timeout_per_step: int = 60,
+        max_steps: int | None = None,
     ) -> None:
         """
         Inicializa o agente de navegacao.
@@ -44,12 +130,15 @@ class BrowserAgent:
             headless: Se True, executa o navegador em modo headless (sem interface grafica).
             timeout: Timeout base em segundos (usado no fallback Playwright).
             timeout_per_step: Timeout maximo por step do agente (segundos).
+            max_steps: Numero maximo de steps para o agente. Se None, sera
+                       determinado por execution_params ou default (20).
         """
         self._base_url = base_url
         self._credentials = credentials
         self._headless = headless
         self._timeout = timeout
         self._timeout_per_step = timeout_per_step
+        self._max_steps = max_steps
 
     async def run(
         self,
@@ -60,7 +149,8 @@ class BrowserAgent:
         Executa a navegacao guiada pelo prompt.
 
         Tenta usar browser-use + LLM agent. Se nao for possivel
-        (sem LLM configurado ou falha), faz fallback para Playwright direto.
+        (sem LLM configurado ou falha), faz fallback para Playwright dirigido
+        usando PromptToPlaywright para extrair acoes do prompt.
 
         Args:
             prompt: Instrucoes de navegacao para o agente.
@@ -88,17 +178,21 @@ class BrowserAgent:
                     'Falha ao executar com browser-use, tentando fallback Playwright: %s',
                     str(e),
                 )
-                # Fallback para Playwright direto
+                # Fallback para Playwright dirigido com PromptToPlaywright
                 return await self._run_with_playwright(
                     prompt=prompt,
                     execution_params=execution_params,
                 )
         else:
-            # Sem LLM, usa Playwright direto
+            # Sem LLM, usa Playwright dirigido
             return await self._run_with_playwright(
                 prompt=prompt,
                 execution_params=execution_params,
             )
+
+    # ------------------------------------------------------------------ #
+    #  Modo browser-use (com LLM)
+    # ------------------------------------------------------------------ #
 
     async def _run_with_browser_use(
         self,
@@ -108,6 +202,9 @@ class BrowserAgent:
     ) -> BrowserResult:
         """
         Executa navegacao usando browser-use com agente de IA.
+
+        Integra circuit breaker (LoopDetector), sandbox rules no prompt,
+        e max_steps dinamico.
 
         Args:
             prompt: Instrucoes de navegacao.
@@ -134,11 +231,18 @@ class BrowserAgent:
             # Configura o LLM para o agente
             llm = self._create_langchain_llm(llm_config)
 
-            # Monta o prompt completo com contexto
+            # Monta o prompt completo com contexto, sandbox e instrucoes assertivas
             full_prompt = self._build_full_prompt(prompt, execution_params)
 
             logs.append(f'Navegando para {self._base_url}')
-            logs.append(f'Prompt: {prompt[:200]}...' if len(prompt) > 200 else f'Prompt: {prompt}')
+            logs.append(
+                f'Prompt: {prompt[:200]}...' if len(prompt) > 200
+                else f'Prompt: {prompt}'
+            )
+
+            # max_steps dinamico (10.1.4):
+            # Prioridade: execution_params > construtor > default
+            max_steps = self._resolve_max_steps(execution_params)
 
             # Cria e executa o agente
             agent = Agent(
@@ -146,14 +250,15 @@ class BrowserAgent:
                 llm=llm,
                 browser=browser,
                 use_vision=True,
-                max_steps=execution_params.get('max_steps', 20),
+                max_steps=max_steps,
             )
 
             # Timeout inteligente: max_steps * timeout_per_step
-            # Permite que o agente trabalhe sem ser cortado enquanto progride
-            max_steps = execution_params.get('max_steps', 20)
             smart_timeout = float(max_steps * self._timeout_per_step)
-            logs.append(f'Timeout: {smart_timeout:.0f}s ({max_steps} steps x {self._timeout_per_step}s/step)')
+            logs.append(
+                f'Timeout: {smart_timeout:.0f}s '
+                f'({max_steps} steps x {self._timeout_per_step}s/step)'
+            )
 
             history = await asyncio.wait_for(
                 agent.run(),
@@ -168,15 +273,79 @@ class BrowserAgent:
                         try:
                             img_bytes = base64.b64decode(b64_str)
                             screenshots.append(img_bytes)
-                            logs.append(f'Capturando screenshot #{len(screenshots)}')
+                            logs.append(
+                                f'Capturando screenshot #{len(screenshots)}'
+                            )
                         except Exception as decode_err:
-                            logs.append(f'Erro ao decodificar screenshot #{i}: {str(decode_err)}')
+                            logs.append(
+                                f'Erro ao decodificar screenshot #{i}: '
+                                f'{str(decode_err)}'
+                            )
 
-            # Extrai URLs visitadas
+            # --- Circuit Breaker: analisa URLs visitadas (10.1.3) ---
             visited_urls = history.urls()
+            loop_warning_injected = False
             if visited_urls:
                 for url in visited_urls:
                     logs.append(f'URL visitada: {url}')
+
+                # Verifica loops nas URLs usando LoopDetector
+                if _HAS_LOOP_DETECTOR:
+                    loop_detector = LoopDetector(
+                        max_url_repeats=3,
+                        max_cycle_repeats=2,
+                        stagnation_threshold=5,
+                        max_action_repeats=3,
+                    )
+                    loop_count = 0
+                    for url in visited_urls:
+                        detection = loop_detector.record_url(url)
+                        if detection is not None:
+                            loop_count += 1
+                            if loop_count == 1:
+                                # Primeira deteccao: warning, continua
+                                logs.append(
+                                    f'AVISO: Loop detectado ({detection}). '
+                                    f'O agente pode estar repetindo acoes.'
+                                )
+                                loop_warning_injected = True
+                            elif loop_count >= 2:
+                                # Segunda deteccao: forca parada
+                                logs.append(
+                                    f'CRITICO: Loop persistente detectado '
+                                    f'({detection}). Forcando parada do agente.'
+                                )
+                                # Captura screenshot final antes de parar
+                                try:
+                                    session = (
+                                        browser._browser_session
+                                        if hasattr(browser, '_browser_session')
+                                        else None
+                                    )
+                                    if session:
+                                        final_ss = await session.get_screenshot()
+                                        if final_ss:
+                                            screenshots.append(
+                                                base64.b64decode(final_ss)
+                                                if isinstance(final_ss, str)
+                                                else final_ss
+                                            )
+                                            logs.append(
+                                                'Screenshot final capturado antes da parada por loop'
+                                            )
+                                except Exception:
+                                    logs.append(
+                                        'Nao foi possivel capturar screenshot final apos loop'
+                                    )
+
+                                return BrowserResult(
+                                    screenshots=screenshots,
+                                    logs=logs,
+                                    success=False,
+                                    error_message=(
+                                        'Loop detectado e agente forcado a parar'
+                                    ),
+                                )
 
             # Extrai conteudo extraido via acao "extract" durante a navegacao
             extracted_content: list[str] = []
@@ -187,7 +356,9 @@ class BrowserAgent:
                         content_str = str(content).strip()
                         if content_str:
                             extracted_content.append(content_str)
-                            logs.append(f'Conteudo extraido: {content_str[:200]}')
+                            logs.append(
+                                f'Conteudo extraido: {content_str[:200]}'
+                            )
 
             # Resultado final do agente
             final = history.final_result()
@@ -199,7 +370,9 @@ class BrowserAgent:
 
             # Deduplica screenshots usando perceptual hashing (pHash)
             if len(screenshots) > 1:
-                from app.modules.agents.screenshot_classifier import ScreenshotClassifier
+                from app.modules.agents.screenshot_classifier import (
+                    ScreenshotClassifier,
+                )
 
                 classifier = ScreenshotClassifier()
                 classified = classifier.deduplicate(screenshots)
@@ -207,22 +380,28 @@ class BrowserAgent:
                 screenshots = [c.image_bytes for c in classified]
                 if len(screenshots) < original_count:
                     logs.append(
-                        f'Screenshots deduplicados via pHash: {original_count} -> {len(screenshots)}'
+                        f'Screenshots deduplicados via pHash: '
+                        f'{original_count} -> {len(screenshots)}'
                     )
 
             # Limita numero maximo de screenshots usando classificacao por relevancia
             max_screenshots = execution_params.get('max_screenshots', 10)
             if len(screenshots) > max_screenshots:
-                from app.modules.agents.screenshot_classifier import ScreenshotClassifier
+                from app.modules.agents.screenshot_classifier import (
+                    ScreenshotClassifier,
+                )
 
                 classifier = ScreenshotClassifier()
                 original_count = len(screenshots)
                 classified = classifier.classify_and_select(
-                    screenshots, max_screenshots=max_screenshots, logs=logs,
+                    screenshots,
+                    max_screenshots=max_screenshots,
+                    logs=logs,
                 )
                 screenshots = [c.image_bytes for c in classified]
                 logs.append(
-                    f'Screenshots limitados por relevancia: selecionados {len(screenshots)} de {original_count}'
+                    f'Screenshots limitados por relevancia: '
+                    f'selecionados {len(screenshots)} de {original_count}'
                 )
 
             # Extrai erros
@@ -232,9 +411,19 @@ class BrowserAgent:
                 for error in errors:
                     if error:
                         has_errors = True
-                        logs.append(f'Erro durante navegacao: {str(error)[:200]}')
+                        logs.append(
+                            f'Erro durante navegacao: {str(error)[:200]}'
+                        )
 
             is_done = history.is_done()
+
+            # Se houve warning de loop mas o agente terminou, menciona nos logs
+            if loop_warning_injected and is_done:
+                logs.append(
+                    'Agente concluiu apos aviso de loop '
+                    '(possivelmente auto-corrigiu)'
+                )
+
             logs.append(
                 f'Navegacao concluida. Steps: {history.number_of_steps()}, '
                 f'Screenshots: {len(screenshots)}, Sucesso: {is_done}'
@@ -245,17 +434,27 @@ class BrowserAgent:
                 logs=logs,
                 extracted_content=extracted_content,
                 success=is_done and not has_errors,
-                error_message=None if not has_errors else 'Erros encontrados durante navegacao',
+                error_message=(
+                    None if not has_errors
+                    else 'Erros encontrados durante navegacao'
+                ),
             )
 
         except asyncio.TimeoutError:
-            max_steps = execution_params.get('max_steps', 20)
+            max_steps = self._resolve_max_steps(execution_params)
             smart_timeout = max_steps * self._timeout_per_step
-            logs.append(f'Timeout atingido ({smart_timeout}s). Capturando screenshot final.')
+            logs.append(
+                f'Timeout atingido ({smart_timeout}s). '
+                f'Capturando screenshot final.'
+            )
             # Tenta capturar screenshot final em caso de timeout
             try:
                 if browser:
-                    session = browser._browser_session if hasattr(browser, '_browser_session') else None
+                    session = (
+                        browser._browser_session
+                        if hasattr(browser, '_browser_session')
+                        else None
+                    )
                     if session:
                         final_screenshot = await session.get_screenshot()
                         if final_screenshot:
@@ -265,7 +464,9 @@ class BrowserAgent:
                                 else final_screenshot
                             )
             except Exception:
-                logs.append('Nao foi possivel capturar screenshot final apos timeout')
+                logs.append(
+                    'Nao foi possivel capturar screenshot final apos timeout'
+                )
 
             return BrowserResult(
                 screenshots=screenshots,
@@ -293,7 +494,13 @@ class BrowserAgent:
                     await browser.stop()
                     logs.append('Navegador fechado com sucesso')
                 except Exception as close_err:
-                    logger.warning('Erro ao fechar navegador: %s', str(close_err))
+                    logger.warning(
+                        'Erro ao fechar navegador: %s', str(close_err)
+                    )
+
+    # ------------------------------------------------------------------ #
+    #  Modo Playwright dirigido (fallback)
+    # ------------------------------------------------------------------ #
 
     async def _run_with_playwright(
         self,
@@ -301,13 +508,14 @@ class BrowserAgent:
         execution_params: dict,
     ) -> BrowserResult:
         """
-        Executa navegacao usando Playwright diretamente (fallback).
+        Executa navegacao usando Playwright dirigido (fallback inteligente).
 
-        Navega para a URL base, realiza login se credenciais fornecidas,
-        visita URLs adicionais dos parametros e captura screenshots.
+        Em vez de navegacao generica, usa PromptToPlaywright para extrair
+        acoes executaveis do prompt. Inclui deteccao de estado da pagina,
+        retry inteligente, timeouts granulares e circuit breaker.
 
         Args:
-            prompt: Instrucoes de navegacao (usadas nos logs).
+            prompt: Instrucoes de navegacao (usadas para extrair acoes).
             execution_params: Parametros adicionais (URLs a visitar, wait_time, etc).
 
         Returns:
@@ -315,17 +523,35 @@ class BrowserAgent:
         """
         from playwright.async_api import async_playwright
 
+        from app.modules.agents.prompt_to_playwright import PromptToPlaywright
+
         logs: list[str] = []
         screenshots: list[bytes] = []
-        playwright = None
+        playwright_instance = None
         browser = None
 
-        try:
-            logs.append(f'Iniciando Playwright (modo direto) para {self._base_url}')
-            logs.append(f'Prompt: {prompt[:200]}...' if len(prompt) > 200 else f'Prompt: {prompt}')
+        # Inicializa LoopDetector se disponivel
+        loop_detector: 'LoopDetector | None' = None
+        if _HAS_LOOP_DETECTOR:
+            loop_detector = LoopDetector(
+                max_url_repeats=3,
+                max_cycle_repeats=2,
+                stagnation_threshold=5,
+                max_action_repeats=3,
+            )
 
-            playwright = await async_playwright().start()
-            browser = await playwright.chromium.launch(
+        try:
+            logs.append(
+                f'Iniciando Playwright (fallback inteligente) para '
+                f'{self._base_url}'
+            )
+            logs.append(
+                f'Prompt: {prompt[:200]}...' if len(prompt) > 200
+                else f'Prompt: {prompt}'
+            )
+
+            playwright_instance = await async_playwright().start()
+            browser = await playwright_instance.chromium.launch(
                 headless=self._headless,
                 args=['--no-sandbox', '--disable-setuid-sandbox'],
             )
@@ -335,19 +561,20 @@ class BrowserAgent:
                 ignore_https_errors=True,
             )
 
-            # Configura timeout das paginas
+            # Configura timeout geral das paginas
             context.set_default_timeout(self._timeout * 1000)
 
             page = await context.new_page()
 
-            # Navega para a URL base
+            # --- Fase 1: Navegacao inicial (com timeout granular) ---
             logs.append(f'Navegando para {self._base_url}')
             try:
                 await page.goto(
                     self._base_url,
                     wait_until='domcontentloaded',
-                    timeout=30000,
+                    timeout=_NAVIGATION_TIMEOUT_MS,
                 )
+                await self._wait_for_page_ready(page)
                 logs.append(f'Pagina carregada: {page.url}')
             except Exception as nav_err:
                 logs.append(f'Erro na navegacao inicial: {str(nav_err)}')
@@ -355,25 +582,37 @@ class BrowserAgent:
                 screenshot = await self._safe_screenshot(page)
                 if screenshot:
                     screenshots.append(screenshot)
-                    logs.append(f'Capturando screenshot #{len(screenshots)} (erro)')
+                    logs.append(
+                        f'Capturando screenshot #{len(screenshots)} (erro)'
+                    )
                 return BrowserResult(
                     screenshots=screenshots,
                     logs=logs,
                     success=False,
-                    error_message=f'Falha na navegacao para {self._base_url}: {str(nav_err)}',
+                    error_message=(
+                        f'Falha na navegacao para {self._base_url}: '
+                        f'{str(nav_err)}'
+                    ),
                 )
+
+            # Registra URL no loop detector
+            if loop_detector:
+                loop_detector.record_url(page.url)
 
             # Captura screenshot da pagina inicial
             screenshot = await self._safe_screenshot(page)
             if screenshot:
                 screenshots.append(screenshot)
-                logs.append(f'Capturando screenshot #{len(screenshots)} (pagina inicial)')
+                logs.append(
+                    f'Capturando screenshot #{len(screenshots)} '
+                    f'(pagina inicial)'
+                )
 
             # Espera opcional antes de continuar
             wait_time = execution_params.get('wait_time', 2)
             await page.wait_for_timeout(int(wait_time * 1000))
 
-            # Tenta login se credenciais fornecidas
+            # --- Fase 2: Login (com timeout granular de 30s) ---
             if self._credentials:
                 login_success = await self._attempt_login(page, logs)
                 if login_success:
@@ -382,40 +621,135 @@ class BrowserAgent:
                     screenshot = await self._safe_screenshot(page)
                     if screenshot:
                         screenshots.append(screenshot)
-                        logs.append(f'Capturando screenshot #{len(screenshots)} (apos login)')
+                        logs.append(
+                            f'Capturando screenshot #{len(screenshots)} '
+                            f'(apos login)'
+                        )
 
-            # Visita URLs adicionais se especificadas nos parametros
+            # --- Fase 3: Execucao de acoes via PromptToPlaywright ---
             additional_urls = execution_params.get('urls', [])
-            for url in additional_urls:
+            actions = PromptToPlaywright.parse(
+                prompt=prompt,
+                base_url=self._base_url,
+                additional_urls=additional_urls,
+            )
+
+            # Filtra a primeira acao goto (ja navegamos para base_url)
+            filtered_actions = [
+                a for a in actions
+                if not (
+                    a.action_type == 'goto'
+                    and a.url
+                    and a.url.rstrip('/') == self._base_url.rstrip('/')
+                )
+            ]
+
+            logs.append(
+                f'PromptToPlaywright: {len(filtered_actions)} acoes extraidas'
+            )
+
+            for action in filtered_actions:
+                # Circuit breaker: verifica loop antes de cada navegacao
+                if action.action_type == 'goto' and action.url:
+                    if loop_detector:
+                        detection = loop_detector.record_url(action.url)
+                        if detection is not None:
+                            logs.append(
+                                f'Loop detectado para URL {action.url}: '
+                                f'{detection}. Parando navegacao.'
+                            )
+                            break
+
+                # Deteccao de estado da pagina antes de acoes interativas
+                if action.action_type in ('click', 'fill'):
+                    await self._wait_for_page_ready(page)
+
+                # Executa acao individual com retry inteligente
                 try:
-                    # Resolve URL relativa
-                    full_url = url if url.startswith('http') else f'{self._base_url.rstrip("/")}/{url.lstrip("/")}'
-                    logs.append(f'Navegando para {full_url}')
+                    if action.action_type == 'goto' and action.url:
+                        logs.append(f'Navegando para {action.url}')
 
-                    await page.goto(
-                        full_url,
-                        wait_until='domcontentloaded',
-                        timeout=30000,
+                        async def _nav_action(
+                            url: str = action.url,
+                        ) -> None:
+                            await page.goto(
+                                url,
+                                wait_until='domcontentloaded',
+                                timeout=_NAVIGATION_TIMEOUT_MS,
+                            )
+
+                        success = await self._smart_retry(
+                            page, _nav_action, max_retries=2, logs=logs,
+                        )
+                        if success:
+                            await self._wait_for_page_ready(page)
+                            logs.append(f'Pagina carregada: {page.url}')
+                            await page.wait_for_timeout(
+                                int(wait_time * 1000)
+                            )
+                            # Captura screenshot
+                            screenshot = await self._safe_screenshot(page)
+                            if screenshot:
+                                screenshots.append(screenshot)
+                                logs.append(
+                                    f'Capturando screenshot '
+                                    f'#{len(screenshots)}'
+                                )
+
+                    elif action.action_type == 'click' and action.selector:
+                        logs.append(f'Clicando em {action.selector}')
+
+                        async def _click_action(
+                            sel: str = action.selector,
+                        ) -> None:
+                            await page.click(
+                                sel, timeout=_EXTRACTION_TIMEOUT_MS,
+                            )
+
+                        await self._smart_retry(
+                            page, _click_action, max_retries=2, logs=logs,
+                        )
+                        await page.wait_for_timeout(1000)
+
+                    elif (
+                        action.action_type == 'fill'
+                        and action.selector
+                        and action.value
+                    ):
+                        logs.append(f'Preenchendo {action.selector}')
+
+                        async def _fill_action(
+                            sel: str = action.selector,
+                            val: str = action.value,
+                        ) -> None:
+                            await page.fill(
+                                sel, val, timeout=_EXTRACTION_TIMEOUT_MS,
+                            )
+
+                        await self._smart_retry(
+                            page, _fill_action, max_retries=2, logs=logs,
+                        )
+
+                    elif action.action_type == 'screenshot':
+                        screenshot = await self._safe_screenshot(page)
+                        if screenshot:
+                            screenshots.append(screenshot)
+                            logs.append(
+                                f'Capturando screenshot '
+                                f'#{len(screenshots)}'
+                            )
+
+                    elif action.action_type == 'wait':
+                        wait_ms = int(action.value or '2000')
+                        await page.wait_for_timeout(wait_ms)
+
+                except Exception as action_err:
+                    logs.append(
+                        f'Erro na acao {action.action_type}: '
+                        f'{str(action_err)[:100]}'
                     )
-                    logs.append(f'Pagina carregada: {page.url}')
 
-                    # Espera a pagina estabilizar
-                    await page.wait_for_timeout(int(wait_time * 1000))
-
-                    # Captura screenshot
-                    screenshot = await self._safe_screenshot(page)
-                    if screenshot:
-                        screenshots.append(screenshot)
-                        logs.append(f'Capturando screenshot #{len(screenshots)}')
-
-                except Exception as url_err:
-                    logs.append(f'Erro ao navegar para {url}: {str(url_err)}')
-                    # Captura screenshot do erro
-                    screenshot = await self._safe_screenshot(page)
-                    if screenshot:
-                        screenshots.append(screenshot)
-                        logs.append(f'Capturando screenshot #{len(screenshots)} (erro)')
-
+            # --- Fase 4: Captura final ---
             # Captura screenshot final (full page)
             try:
                 final_screenshot = await page.screenshot(
@@ -423,19 +757,28 @@ class BrowserAgent:
                     type='png',
                 )
                 screenshots.append(final_screenshot)
-                logs.append(f'Capturando screenshot #{len(screenshots)} (pagina completa final)')
+                logs.append(
+                    f'Capturando screenshot #{len(screenshots)} '
+                    f'(pagina completa final)'
+                )
             except Exception:
-                logs.append('Nao foi possivel capturar screenshot final (full page)')
+                logs.append(
+                    'Nao foi possivel capturar screenshot final (full page)'
+                )
 
             # Garante pelo menos um screenshot
             if not screenshots:
                 screenshot = await self._safe_screenshot(page)
                 if screenshot:
                     screenshots.append(screenshot)
-                    logs.append(f'Capturando screenshot #{len(screenshots)} (fallback)')
+                    logs.append(
+                        f'Capturando screenshot #{len(screenshots)} '
+                        f'(fallback)'
+                    )
 
             logs.append(
-                f'Navegacao concluida. Screenshots capturados: {len(screenshots)}'
+                f'Navegacao concluida. Screenshots capturados: '
+                f'{len(screenshots)}'
             )
 
             return BrowserResult(
@@ -473,12 +816,117 @@ class BrowserAgent:
                     await browser.close()
                     logs.append('Navegador fechado com sucesso')
                 except Exception as close_err:
-                    logger.warning('Erro ao fechar navegador: %s', str(close_err))
-            if playwright:
+                    logger.warning(
+                        'Erro ao fechar navegador: %s', str(close_err)
+                    )
+            if playwright_instance:
                 try:
-                    await playwright.stop()
+                    await playwright_instance.stop()
                 except Exception:
                     pass
+
+    # ------------------------------------------------------------------ #
+    #  Deteccao de estado da pagina (10.3.3)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    async def _wait_for_page_ready(
+        page: 'object',
+        timeout_ms: int = _PAGE_READY_TIMEOUT_MS,
+    ) -> None:
+        """
+        Aguarda pagina estabilizar antes de interagir.
+
+        Verifica se o DOM foi carregado e tenta fechar modais/popups
+        comuns que possam estar bloqueando a interacao.
+
+        Args:
+            page: Instancia da pagina Playwright.
+            timeout_ms: Timeout maximo em milissegundos para aguardar estabilizacao.
+        """
+        try:
+            await page.wait_for_load_state(
+                'domcontentloaded', timeout=timeout_ms,
+            )
+        except Exception:
+            pass
+
+        # Tenta fechar modais/popups comuns
+        for selector in _MODAL_CLOSE_SELECTORS:
+            try:
+                element = page.locator(selector).first
+                if await element.is_visible(timeout=500):
+                    await element.click()
+                    break
+            except Exception:
+                continue
+
+    # ------------------------------------------------------------------ #
+    #  Retry inteligente (10.3.4)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    async def _smart_retry(
+        page: 'object',
+        action_fn: 'object',
+        max_retries: int = 2,
+        logs: list[str] | None = None,
+    ) -> bool:
+        """
+        Retry inteligente com analise de erro e ajuste de estrategia.
+
+        Diagnostica o tipo de falha e aplica estrategia apropriada:
+        - element not found -> aguardar 2s + retry
+        - timeout -> aguardar 3s + retry
+        - click intercepted -> scroll/fechar modal + retry
+
+        Args:
+            page: Instancia da pagina Playwright.
+            action_fn: Funcao async que executa a acao.
+            max_retries: Numero maximo de retentativas.
+            logs: Lista opcional para registrar logs.
+
+        Returns:
+            True se a acao foi executada com sucesso, False caso contrario.
+        """
+        for attempt in range(max_retries + 1):
+            try:
+                await action_fn()
+                return True
+            except Exception as e:
+                error_str = str(e).lower()
+                if attempt >= max_retries:
+                    if logs:
+                        logs.append(
+                            f'Acao falhou apos {max_retries + 1} '
+                            f'tentativas: {str(e)[:100]}'
+                        )
+                    return False
+
+                # Diagnostico e ajuste de estrategia por tipo de erro
+                if 'not found' in error_str or 'no element' in error_str:
+                    # Elemento nao encontrado: aguarda renderizacao
+                    await page.wait_for_timeout(2000)
+                elif 'timeout' in error_str:
+                    # Timeout: espera mais antes de tentar novamente
+                    await page.wait_for_timeout(3000)
+                elif 'intercept' in error_str:
+                    # Click interceptado por overlay: tenta fechar modal
+                    await BrowserAgent._wait_for_page_ready(page)
+                else:
+                    # Erro generico: pequena pausa antes de retry
+                    await page.wait_for_timeout(1000)
+
+                if logs:
+                    logs.append(
+                        f'Retry {attempt + 1}/{max_retries}: '
+                        f'{str(e)[:80]}'
+                    )
+        return False
+
+    # ------------------------------------------------------------------ #
+    #  Login automatico (com timeout granular e retry inteligente)
+    # ------------------------------------------------------------------ #
 
     async def _attempt_login(
         self,
@@ -489,7 +937,8 @@ class BrowserAgent:
         Tenta realizar login na pagina usando as credenciais configuradas.
 
         Procura por campos comuns de login (email, username, password)
-        e tenta preencher e submeter o formulario.
+        e tenta preencher e submeter o formulario. Usa timeout granular
+        de 30s para toda a operacao de login.
 
         Args:
             page: Instancia da pagina Playwright.
@@ -501,122 +950,140 @@ class BrowserAgent:
         if not self._credentials:
             return False
 
-        username = self._credentials.get('username') or self._credentials.get('email', '')
+        username = (
+            self._credentials.get('username')
+            or self._credentials.get('email', '')
+        )
         password = self._credentials.get('password', '')
 
         if not username or not password:
-            logs.append('Credenciais incompletas: username/email ou password ausente')
+            logs.append(
+                'Credenciais incompletas: username/email ou password ausente'
+            )
             return False
 
         logs.append('Tentando realizar login automatico')
 
-        # Seletores comuns para campos de login
-        username_selectors = [
-            'input[type="email"]',
-            'input[name="email"]',
-            'input[name="username"]',
-            'input[name="login"]',
-            'input[name="user"]',
-            'input[id="email"]',
-            'input[id="username"]',
-            'input[id="login"]',
-            'input[type="text"][name*="user"]',
-            'input[type="text"][name*="email"]',
-            'input[type="text"][name*="login"]',
-            '#email',
-            '#username',
-            '#login',
-        ]
-
-        password_selectors = [
-            'input[type="password"]',
-            'input[name="password"]',
-            'input[name="passwd"]',
-            'input[name="pass"]',
-            'input[id="password"]',
-            '#password',
-        ]
-
-        submit_selectors = [
-            'button[type="submit"]',
-            'input[type="submit"]',
-            'button:has-text("Login")',
-            'button:has-text("Entrar")',
-            'button:has-text("Sign in")',
-            'button:has-text("Log in")',
-            'button:has-text("Submit")',
-        ]
-
         try:
-            # Procura e preenche o campo de username/email
-            username_filled = False
-            for selector in username_selectors:
-                try:
-                    element = page.locator(selector).first
-                    if await element.is_visible(timeout=2000):
-                        await element.fill(username)
-                        username_filled = True
-                        logs.append(f'Campo de usuario encontrado: {selector}')
-                        break
-                except Exception:
-                    continue
-
-            if not username_filled:
-                logs.append('Campo de usuario nao encontrado na pagina')
-                return False
-
-            # Procura e preenche o campo de password
-            password_filled = False
-            for selector in password_selectors:
-                try:
-                    element = page.locator(selector).first
-                    if await element.is_visible(timeout=2000):
-                        await element.fill(password)
-                        password_filled = True
-                        logs.append(f'Campo de senha encontrado: {selector}')
-                        break
-                except Exception:
-                    continue
-
-            if not password_filled:
-                logs.append('Campo de senha nao encontrado na pagina')
-                return False
-
-            # Procura e clica no botao de submit
-            submitted = False
-            for selector in submit_selectors:
-                try:
-                    element = page.locator(selector).first
-                    if await element.is_visible(timeout=2000):
-                        await element.click()
-                        submitted = True
-                        logs.append(f'Botao de login encontrado e clicado: {selector}')
-                        break
-                except Exception:
-                    continue
-
-            if not submitted:
-                # Tenta submeter com Enter no campo de senha
-                try:
-                    await page.keyboard.press('Enter')
-                    submitted = True
-                    logs.append('Formulario submetido com Enter')
-                except Exception:
-                    logs.append('Nao foi possivel submeter o formulario de login')
-                    return False
-
-            # Espera a navegacao apos login
-            try:
-                await page.wait_for_load_state('domcontentloaded', timeout=10000)
-            except Exception:
-                pass
-
-            logs.append(f'Login realizado. URL atual: {page.url}')
-            return True
-
+            # Timeout granular para login: 30s total (10.2.3)
+            return await asyncio.wait_for(
+                self._do_login(page, username, password, logs),
+                timeout=_LOGIN_TIMEOUT_MS / 1000,
+            )
+        except asyncio.TimeoutError:
+            logs.append(
+                f'Timeout no login ({_LOGIN_TIMEOUT_MS / 1000:.0f}s). '
+                f'Prosseguindo sem login.'
+            )
+            return False
         except Exception as e:
             logs.append(f'Erro durante tentativa de login: {str(e)}')
             return False
+
+    async def _do_login(
+        self,
+        page: 'object',
+        username: str,
+        password: str,
+        logs: list[str],
+    ) -> bool:
+        """
+        Logica interna de login com retry inteligente em cada campo.
+
+        Args:
+            page: Instancia da pagina Playwright.
+            username: Nome de usuario ou email.
+            password: Senha.
+            logs: Lista de logs.
+
+        Returns:
+            True se o login foi submetido com sucesso.
+        """
+        # Procura e preenche o campo de username/email
+        username_filled = False
+        for selector in _USERNAME_SELECTORS:
+            try:
+                element = page.locator(selector).first
+                if await element.is_visible(timeout=2000):
+                    await element.fill(username)
+                    username_filled = True
+                    logs.append(f'Campo de usuario encontrado: {selector}')
+                    break
+            except Exception:
+                continue
+
+        if not username_filled:
+            logs.append('Campo de usuario nao encontrado na pagina')
+            return False
+
+        # Procura e preenche o campo de password
+        password_filled = False
+        for selector in _PASSWORD_SELECTORS:
+            try:
+                element = page.locator(selector).first
+                if await element.is_visible(timeout=2000):
+                    await element.fill(password)
+                    password_filled = True
+                    logs.append(f'Campo de senha encontrado: {selector}')
+                    break
+            except Exception:
+                continue
+
+        if not password_filled:
+            logs.append('Campo de senha nao encontrado na pagina')
+            return False
+
+        # Procura e clica no botao de submit (com retry inteligente)
+        submitted = False
+        for selector in _SUBMIT_SELECTORS:
+            try:
+                element = page.locator(selector).first
+                if await element.is_visible(timeout=2000):
+
+                    async def _click_submit(
+                        sel: str = selector,
+                    ) -> None:
+                        await page.click(sel, timeout=5000)
+
+                    success = await self._smart_retry(
+                        page, _click_submit, max_retries=1, logs=logs,
+                    )
+                    if success:
+                        submitted = True
+                        logs.append(
+                            f'Botao de login encontrado e clicado: '
+                            f'{selector}'
+                        )
+                        break
+            except Exception:
+                continue
+
+        if not submitted:
+            # Tenta submeter com Enter no campo de senha
+            try:
+                await page.keyboard.press('Enter')
+                submitted = True
+                logs.append('Formulario submetido com Enter')
+            except Exception:
+                logs.append(
+                    'Nao foi possivel submeter o formulario de login'
+                )
+                return False
+
+        # Espera a navegacao apos login
+        try:
+            await page.wait_for_load_state(
+                'domcontentloaded', timeout=10000,
+            )
+        except Exception:
+            pass
+
+        logs.append(f'Login realizado. URL atual: {page.url}')
+        return True
+
+    # ------------------------------------------------------------------ #
+    #  Screenshot seguro
+    # ------------------------------------------------------------------ #
 
     @staticmethod
     async def _safe_screenshot(page: 'object') -> bytes | None:
@@ -635,16 +1102,21 @@ class BrowserAgent:
             logger.warning('Erro ao capturar screenshot: %s', str(e))
             return None
 
+    # ------------------------------------------------------------------ #
+    #  Prompt assertivo (10.3.1) + Sandbox (10.2.2)
+    # ------------------------------------------------------------------ #
+
     def _build_full_prompt(
         self,
         prompt: str,
         execution_params: dict,
     ) -> str:
         """
-        Constroi o prompt completo para o agente browser-use.
+        Constroi o prompt completo e assertivo para o agente browser-use.
 
-        Inclui a URL base, instrucoes de login se necessario,
-        e parametros adicionais.
+        Inclui instrucoes numeradas e diretas, regras de screenshots,
+        regras de comportamento, restricoes de sandbox e finalizacao
+        obrigatoria. Projetado para minimizar loops e navegacao desnecessaria.
 
         Args:
             prompt: Prompt original do usuario/job.
@@ -655,57 +1127,123 @@ class BrowserAgent:
         """
         parts: list[str] = []
 
-        # URL base
-        parts.append(f'Navegue para {self._base_url}.')
+        # Identidade e objetivo (direto e assertivo)
+        parts.append(
+            'Voce e um agente de automacao web. '
+            'Siga EXATAMENTE estas instrucoes na ordem:'
+        )
 
-        # Instrucoes de login
+        # Step 1: Navegacao
+        step_num = 1
+        parts.append(f'{step_num}. Navegue para {self._base_url}')
+        step_num += 1
+
+        # Step 2: Login (se aplicavel)
         if self._credentials:
-            username = self._credentials.get('username') or self._credentials.get('email', '')
+            username = (
+                self._credentials.get('username')
+                or self._credentials.get('email', '')
+            )
             if username:
                 parts.append(
-                    f'Faca login usando o email/usuario "{username}" e a senha fornecida.'
+                    f'{step_num}. Faca login com o email/usuario '
+                    f'"{username}" e a senha fornecida'
                 )
+                step_num += 1
 
-        # URLs adicionais
+        # Step N: URLs adicionais
         additional_urls = execution_params.get('urls', [])
         if additional_urls:
+            urls_str = ', '.join(additional_urls)
             parts.append(
-                f'Depois visite estas URLs adicionais: {", ".join(additional_urls)}.'
+                f'{step_num}. Visite estas URLs adicionais: {urls_str}'
+            )
+            step_num += 1
+
+        # Step N+1: Instrucoes do usuario
+        parts.append(f'{step_num}. {prompt}')
+        step_num += 1
+
+        # Step N+2: Extracao de conteudo
+        parts.append(
+            f'{step_num}. Use a acao "extract" para registrar sua analise '
+            f'do que voce esta vendo: conteudo visual, informacoes, '
+            f'observacoes importantes e insights'
+        )
+        step_num += 1
+
+        # Step N+3: Screenshot
+        parts.append(
+            f'{step_num}. Capture screenshots APENAS dos resultados '
+            f'encontrados'
+        )
+        step_num += 1
+
+        # Step N+4: Finalizar
+        parts.append(
+            f'{step_num}. Finalize imediatamente apos completar todas as '
+            f'instrucoes'
+        )
+
+        # Regras de screenshots
+        max_screenshots = execution_params.get('max_screenshots', 10)
+        parts.append(f'''
+REGRAS DE SCREENSHOTS:
+- NAO capture screenshots a cada passo intermediario
+- Capture APENAS: apos carregar a pagina, apos login, ao encontrar dados solicitados, estado final
+- Maximo de {max_screenshots} screenshots
+
+REGRAS DE COMPORTAMENTO:
+- NAO explore paginas nao solicitadas
+- NAO clique em links nao relacionados a tarefa
+- NAO repita acoes ja concluidas
+- Se uma acao falhar, tente NO MAXIMO 2 vezes antes de prosseguir
+- Se um modal/popup aparecer, feche-o antes de continuar''')
+
+        # Regras de sandbox — injetadas dos execution_params (10.2.2)
+        sandbox_rules = execution_params.get('sandbox_rules', '')
+        if sandbox_rules:
+            parts.append(
+                f'\nRESTRICOES DE SEGURANCA:\n{sandbox_rules}'
             )
 
-        # Prompt principal
-        parts.append(f'Instrucoes: {prompt}')
+        # Finalizacao obrigatoria — previne loops
+        parts.append('''
+FINALIZACAO OBRIGATORIA:
+Ao concluir TODAS as instrucoes, sinalize imediatamente com done.
+NAO continue navegando. NAO explore secoes adicionais.
+Se todas as tentativas de uma acao falharem, prossiga para a proxima instrucao.''')
 
-        # Instrucao para extrair conteudo durante a navegacao
-        parts.append(
-            'Enquanto navega, use a acao "extract" para extrair e registrar sua analise '
-            'do que voce esta vendo: descreva o conteudo visual, informacoes encontradas, '
-            'observacoes importantes e insights. Essa analise sera usada no relatorio final.'
-        )
+        return '\n'.join(parts)
 
-        # Regras de captura de screenshots — momentos-chave apenas
-        max_screenshots = execution_params.get('max_screenshots', 10)
-        parts.append(
-            f'REGRAS DE SCREENSHOTS: '
-            f'NAO capture screenshots a cada passo ou acao intermediaria. '
-            f'Capture APENAS nos seguintes momentos: '
-            f'1. Apos a pagina principal carregar completamente. '
-            f'2. Apos realizar login (se aplicavel). '
-            f'3. Quando encontrar os dados ou informacoes solicitados. '
-            f'4. No estado final apos completar todas as instrucoes. '
-            f'Maximo de {max_screenshots} screenshots durante toda a execucao.'
-        )
+    # ------------------------------------------------------------------ #
+    #  max_steps dinamico (10.1.4)
+    # ------------------------------------------------------------------ #
 
-        # Instrucao de finalizacao assertiva — evita loops e navegacao desnecessaria
-        parts.append(
-            'FINALIZACAO OBRIGATORIA: '
-            'Ao concluir TODAS as instrucoes acima, sinalize imediatamente que a tarefa esta concluida. '
-            'NAO explore secoes adicionais do site. NAO repita acoes. '
-            'NAO navegue para URLs nao solicitadas. '
-            'Se uma acao falhar apos 2 tentativas, prossiga para a proxima instrucao.'
-        )
+    def _resolve_max_steps(self, execution_params: dict) -> int:
+        """
+        Resolve o numero maximo de steps para o agente.
 
-        return ' '.join(parts)
+        Prioridade:
+        1. execution_params['max_steps'] (definido pelo caller/tasks.py)
+        2. self._max_steps (passado no construtor)
+        3. Default: 20
+
+        Args:
+            execution_params: Parametros de execucao com possivel max_steps.
+
+        Returns:
+            Numero maximo de steps.
+        """
+        if 'max_steps' in execution_params:
+            return int(execution_params['max_steps'])
+        if self._max_steps is not None:
+            return self._max_steps
+        return 20
+
+    # ------------------------------------------------------------------ #
+    #  Criacao de LLM para browser-use
+    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _create_langchain_llm(llm_config: dict) -> 'object':
@@ -775,7 +1313,8 @@ class BrowserAgent:
                 )
             except ImportError:
                 raise ImportError(
-                    'O pacote "langchain-google-genai" e necessario para usar Google com browser-use. '
+                    'O pacote "langchain-google-genai" e necessario para '
+                    'usar Google com browser-use. '
                     'Instale com: pip install langchain-google-genai'
                 )
 

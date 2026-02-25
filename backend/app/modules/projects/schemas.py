@@ -46,6 +46,14 @@ class ProjectCreate(BaseModel):
         gt=0,
         description='Timeout em segundos para chamadas ao LLM',
     )
+    allowed_domains: list[str] | None = Field(
+        None,
+        description='Lista de dominios permitidos para navegacao do agente',
+    )
+    blocked_urls: list[str] | None = Field(
+        None,
+        description='Lista de padroes regex de URLs bloqueadas para o agente',
+    )
 
     @field_validator('base_url')
     @classmethod
@@ -94,6 +102,14 @@ class ProjectUpdate(BaseModel):
     llm_max_tokens: int | None = Field(None, gt=0)
     llm_timeout: int | None = Field(None, gt=0)
     is_active: bool | None = Field(None)
+    allowed_domains: list[str] | None = Field(
+        None,
+        description='Lista de dominios permitidos para navegacao do agente',
+    )
+    blocked_urls: list[str] | None = Field(
+        None,
+        description='Lista de padroes regex de URLs bloqueadas para o agente',
+    )
 
     @field_validator('base_url')
     @classmethod
@@ -154,6 +170,8 @@ class ProjectResponse(BaseModel):
     llm_temperature: float
     llm_max_tokens: int
     llm_timeout: int
+    allowed_domains: list[str] | None = None
+    blocked_urls: list[str] | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -177,6 +195,8 @@ class ProjectResponse(BaseModel):
             llm_temperature=project.llm_temperature,
             llm_max_tokens=project.llm_max_tokens,
             llm_timeout=project.llm_timeout,
+            allowed_domains=project.allowed_domains,
+            blocked_urls=project.blocked_urls,
             is_active=project.is_active,
             created_at=project.created_at,
             updated_at=project.updated_at,
