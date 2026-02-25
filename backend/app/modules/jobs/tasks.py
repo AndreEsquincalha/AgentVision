@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import threading
+import traceback
 import uuid
 from datetime import timedelta
 
@@ -43,6 +44,33 @@ _SEMAPHORE_RETRY_COUNTDOWN: int = 30
 # Prefixo das chaves Redis
 _LOCK_KEY_PREFIX: str = 'job_lock:'
 _SEMAPHORE_KEY: str = 'execution_semaphore'
+
+# URL base do frontend para links em notificacoes
+_FRONTEND_BASE_URL: str = 'http://localhost:3000'
+
+
+# ---------------------------------------------------------------------------
+# Hierarquia de erros para recuperacao granular (11.3.1)
+# ---------------------------------------------------------------------------
+
+class FatalExecutionError(Exception):
+    """
+    Erro FATAL: impossivel continuar a execucao.
+
+    Ex: browser nao inicia, URL inacessivel, validacao falha.
+    Resultado: execucao marcada como 'failed'.
+    """
+    pass
+
+
+class CriticalExecutionError(Exception):
+    """
+    Erro CRITICO: falha grave mas execucao pode continuar parcialmente.
+
+    Ex: login falha, mas ainda pode capturar screenshots da pagina publica.
+    Resultado: execucao continua com aviso.
+    """
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +397,138 @@ def _calculate_max_steps(
 
 
 # ---------------------------------------------------------------------------
-# Task principal: execute_job
+# Helper: Atualiza progresso da execucao no banco (11.3.2)
+# ---------------------------------------------------------------------------
+
+def _update_progress(
+    execution_id: uuid.UUID,
+    progress_percent: int,
+    db_session: 'Session | None' = None,
+) -> None:
+    """
+    Atualiza o progresso percentual de uma execucao.
+
+    Usa a sessao fornecida ou cria uma propria. Erros sao ignorados
+    (logging apenas) para nao interromper a execucao.
+
+    Args:
+        execution_id: ID da execucao.
+        progress_percent: Percentual de progresso (0-100).
+        db_session: Sessao do banco (opcional; cria uma nova se None).
+    """
+    own_session = db_session is None
+    db = db_session or SessionLocal()
+    try:
+        from app.modules.executions.models import Execution
+        from sqlalchemy import select
+
+        stmt = select(Execution).where(Execution.id == execution_id)
+        execution = db.execute(stmt).scalar_one_or_none()
+        if execution:
+            execution.progress_percent = max(0, min(100, progress_percent))
+            db.commit()
+    except Exception as e:
+        logger.debug(
+            'Erro ao atualizar progresso da execution %s: %s',
+            str(execution_id), str(e),
+        )
+    finally:
+        if own_session:
+            db.close()
+
+
+# ---------------------------------------------------------------------------
+# Helper: Notificacao de falha critica (11.3.4)
+# ---------------------------------------------------------------------------
+
+def send_failure_notification(
+    job_id: uuid.UUID,
+    job_name: str,
+    execution_id: uuid.UUID,
+    error_message: str,
+    notify_on_failure: bool,
+) -> None:
+    """
+    Envia notificacao de falha de execucao pelos canais configurados.
+
+    Verifica se o job tem notify_on_failure ativo e se existem delivery configs
+    ativos. Se sim, envia uma notificacao de alerta por cada canal.
+
+    Args:
+        job_id: ID do job que falhou.
+        job_name: Nome do job.
+        execution_id: ID da execucao que falhou.
+        error_message: Mensagem de erro da falha.
+        notify_on_failure: Se o job tem notificacao de falha ativa.
+    """
+    if not notify_on_failure:
+        logger.debug(
+            'Notificacao de falha desabilitada para job %s', str(job_id),
+        )
+        return
+
+    db = SessionLocal()
+    try:
+        from app.modules.delivery.models import DeliveryConfig  # noqa: F401
+        from app.modules.delivery.repository import DeliveryRepository
+        from app.modules.delivery.service import DeliveryService
+
+        delivery_repo = DeliveryRepository(db)
+        delivery_service = DeliveryService(delivery_repo)
+
+        # Busca configuracoes de entrega ativas
+        active_configs = delivery_repo.get_active_configs_by_job(job_id)
+
+        if not active_configs:
+            logger.debug(
+                'Sem delivery configs ativos para notificacao de falha do job %s',
+                str(job_id),
+            )
+            return
+
+        # Monta dados da notificacao de falha
+        now = utc_now()
+        execution_url = (
+            f'{_FRONTEND_BASE_URL}/executions/{execution_id}'
+        )
+
+        execution_data: dict = {
+            'job_name': job_name,
+            'execution_date': now.isoformat(),
+            'summary': (
+                f'FALHA NA EXECUCAO\n\n'
+                f'Job: {job_name}\n'
+                f'Execution ID: {execution_id}\n'
+                f'Erro: {error_message[:500]}\n'
+                f'Data: {now.strftime("%d/%m/%Y %H:%M:%S UTC")}\n\n'
+                f'Acesse os detalhes: {execution_url}'
+            ),
+        }
+
+        delivery_service.deliver(
+            execution_id=execution_id,
+            delivery_configs=active_configs,
+            pdf_path=None,
+            execution_data=execution_data,
+        )
+
+        logger.info(
+            'Notificacao de falha enviada para job %s (execution=%s, canais=%d)',
+            str(job_id), str(execution_id), len(active_configs),
+        )
+
+    except Exception as e:
+        # Notificacao de falha e best-effort; nao deve impedir o fluxo
+        logger.warning(
+            'Erro ao enviar notificacao de falha para job %s: %s',
+            str(job_id), str(e),
+        )
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Task principal: execute_job (11.3.1 — recuperacao granular)
 # ---------------------------------------------------------------------------
 
 @celery_app.task(
@@ -388,20 +547,20 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
     - Heartbeat thread (prova de vida para deteccao de execucoes orfas)
     - Registro de celery_task_id para correlacao
 
-    Fluxo:
-    1. Adquire semaforo global (se cheio, reenfileira com retry)
-    2. Adquire lock distribuido por job_id (se ja em uso, pula)
-    3. Busca o Job com projeto e delivery configs
-    4. Cria registro de Execution (status=pending, com celery_task_id)
-    5. Inicia heartbeat thread
-    6. Atualiza para running, inicia BrowserAgent
-    7. Salva screenshots no MinIO
-    8. Analisa com VisionAnalyzer (LLM)
-    9. Gera PDF com PDFGenerator
-    10. Salva PDF no MinIO
-    11. Entrega via DeliveryService (exceto dry_run)
-    12. Atualiza Execution para success ou failed
-    13. Libera lock e semaforo no finally
+    Recuperacao granular por fase (11.3.1):
+    - FATAL: browser nao inicia, URL inacessivel -> para e marca como failed
+    - CRITICAL: login falha -> continua sem login
+    - WARNING: LLM falha -> gera PDF sem analise
+    - INFO: delivery falha -> execucao e success (delivery e best-effort)
+
+    Progresso parcial (11.3.2):
+    - 10%: Execution criada
+    - 20%: Browser iniciado
+    - 40%: Navegacao concluida
+    - 60%: Screenshots salvos
+    - 75%: Analise LLM concluida
+    - 90%: PDF gerado
+    - 100%: Entrega concluida / finalizado
 
     Args:
         self: Instancia da task (bind=True).
@@ -411,6 +570,9 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
     Returns:
         Dicionario com resultado da execucao.
     """
+    # Importa o ExecutionLogger para logs estruturados (11.3.3)
+    from app.modules.executions.log_utils import ExecutionLogger
+
     redis_client = _get_redis_client()
     lock_token = str(uuid.uuid4())
     lock_acquired = False
@@ -420,8 +582,12 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
     job_uuid = uuid.UUID(job_id)
     execution_id: uuid.UUID | None = None
     started_at = None
-    all_logs: list[str] = []
+    exec_logger = ExecutionLogger()
     db = SessionLocal()
+
+    # Variaveis extraidas do job para uso ao longo da task
+    job_name: str = ''
+    notify_on_failure: bool = True
 
     try:
         # -----------------------------------------------------------------
@@ -533,11 +699,15 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         # Extrai dados do job e projeto em variaveis locais para evitar
         # que o SQLAlchemy persista alteracoes acidentais nos objetos
         # durante os commits subsequentes da sessao (BUG-006).
-        job_name: str = job.name
+        job_name = job.name
         job_agent_prompt: str = job.agent_prompt
         job_execution_params: dict | None = (
             dict(job.execution_params) if job.execution_params else None
         )
+        notify_on_failure = getattr(job, 'notify_on_failure', True)
+        if notify_on_failure is None:
+            notify_on_failure = True
+
         project_name: str = project.name
         project_base_url: str = project.base_url
         project_id: uuid.UUID = project.id
@@ -567,6 +737,9 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             str(execution_id), self.request.id,
         )
 
+        # Progresso: 10% — execucao criada
+        _update_progress(execution_id, 10, db)
+
         # -----------------------------------------------------------------
         # 3. Atualiza para running, registra started_at e inicia heartbeat
         # -----------------------------------------------------------------
@@ -586,10 +759,10 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
 
         logger.info('Execution %s atualizada para running', str(execution_id))
 
-        all_logs.append(f'Iniciando execucao do job "{job_name}"')
-        all_logs.append(f'Projeto: {project_name} | URL: {project_base_url}')
-        all_logs.append(f'Dry run: {is_dry_run}')
-        all_logs.append(f'Task ID: {self.request.id}')
+        exec_logger.info('setup', f'Iniciando execucao do job "{job_name}"')
+        exec_logger.info('setup', f'Projeto: {project_name} | URL: {project_base_url}')
+        exec_logger.info('setup', f'Dry run: {is_dry_run}')
+        exec_logger.info('setup', f'Task ID: {self.request.id}')
 
         # -----------------------------------------------------------------
         # 4. Obtem credenciais e configuracao LLM do projeto
@@ -598,21 +771,30 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         try:
             credentials = project_service.get_decrypted_credentials(project_id)
             if credentials:
-                all_logs.append('Credenciais do projeto carregadas com sucesso')
+                exec_logger.info('setup', 'Credenciais do projeto carregadas com sucesso')
             else:
-                all_logs.append('Projeto sem credenciais configuradas')
+                exec_logger.info('setup', 'Projeto sem credenciais configuradas')
         except Exception as e:
-            all_logs.append(f'Aviso: nao foi possivel carregar credenciais: {str(e)}')
+            exec_logger.warning(
+                'setup',
+                f'Nao foi possivel carregar credenciais: {str(e)}',
+                {'error_type': type(e).__name__},
+            )
             logger.warning('Falha ao carregar credenciais do projeto %s: %s', project_id, str(e))
 
         llm_config: dict = {}
         try:
             llm_config = project_service.get_llm_config(project_id)
-            all_logs.append(
-                f'LLM configurado: {llm_config.get("provider")} / {llm_config.get("model")}'
+            exec_logger.info(
+                'setup',
+                f'LLM configurado: {llm_config.get("provider")} / {llm_config.get("model")}',
             )
         except Exception as e:
-            all_logs.append(f'Aviso: nao foi possivel carregar config LLM: {str(e)}')
+            exec_logger.warning(
+                'setup',
+                f'Nao foi possivel carregar config LLM: {str(e)}',
+                {'error_type': type(e).__name__},
+            )
             logger.warning('Falha ao carregar config LLM do projeto %s: %s', project_id, str(e))
 
         # -----------------------------------------------------------------
@@ -627,41 +809,23 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         )
 
         for warning in validation.warnings:
-            all_logs.append(f'Aviso de validacao: {warning}')
+            exec_logger.warning('setup', f'Aviso de validacao: {warning}')
 
         if not validation.is_valid:
             for error in validation.errors:
-                all_logs.append(f'Erro de validacao: {error}')
+                exec_logger.fatal('setup', f'Erro de validacao: {error}')
 
             logger.warning(
                 'Validacao pre-execucao falhou para job %s: %s',
                 job_id, '; '.join(validation.errors),
             )
 
-            # Atualiza execution para failed
-            finished_at = utc_now()
-            duration_seconds = (
-                int((finished_at - started_at).total_seconds())
-                if started_at
-                else None
+            # FATAL: validacao falhou, impossivel prosseguir
+            raise FatalExecutionError(
+                'Validacao pre-execucao falhou: ' + '; '.join(validation.errors)
             )
 
-            execution_repo.update_status(
-                execution_id=execution_id,
-                status='failed',
-                logs='\n'.join(all_logs),
-                finished_at=finished_at,
-                duration_seconds=duration_seconds,
-            )
-
-            return {
-                'success': False,
-                'execution_id': str(execution_id),
-                'job_id': job_id,
-                'error': 'Validacao pre-execucao falhou: ' + '; '.join(validation.errors),
-            }
-
-        all_logs.append('Validacao pre-execucao aprovada')
+        exec_logger.info('setup', 'Validacao pre-execucao aprovada')
 
         # -----------------------------------------------------------------
         # 4.6. Calcula max_steps dinamico baseado na complexidade
@@ -672,61 +836,92 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             credentials=credentials,
             exec_params=exec_params_dict,
         )
-        all_logs.append(f'max_steps calculado: {calculated_max_steps}')
+        exec_logger.info('setup', f'max_steps calculado: {calculated_max_steps}')
 
         # -----------------------------------------------------------------
-        # 5. Inicializa e executa o BrowserAgent
+        # 5. FASE: Browser — Inicializa e executa o BrowserAgent
+        # Nivel de erro: FATAL se browser nao iniciar
         # -----------------------------------------------------------------
-        all_logs.append('Iniciando agente de navegacao...')
+        exec_logger.info('browser', 'Iniciando agente de navegacao...')
 
-        from app.modules.agents.browser_agent import BrowserAgent
+        screenshots: list[bytes] = []
+        try:
+            from app.modules.agents.browser_agent import BrowserAgent
 
-        browser_agent = BrowserAgent(
-            base_url=project_base_url,
-            credentials=credentials,
-            headless=True,
-            timeout=llm_config.get('timeout', 120),
-        )
-
-        # Monta os parametros de execucao, incluindo config do LLM
-        # para que o browser-use possa usar o agente inteligente
-        exec_params = dict(job_execution_params or {})
-        exec_params['max_steps'] = calculated_max_steps
-        if llm_config.get('api_key'):
-            exec_params['llm_config'] = {
-                'provider': llm_config.get('provider'),
-                'model': llm_config.get('model'),
-                'api_key': llm_config.get('api_key'),
-                'temperature': llm_config.get('temperature', 0.7),
-            }
-
-        # Executa o agente (async -> sync bridge)
-        prompt = job_agent_prompt
-        browser_result = _run_async(browser_agent.run(
-            prompt=prompt,
-            execution_params=exec_params,
-        ))
-
-        all_logs.extend(browser_result.logs)
-
-        if not browser_result.success:
-            all_logs.append(
-                f'Agente de navegacao finalizou com erros: {browser_result.error_message}'
-            )
-            logger.warning(
-                'BrowserAgent finalizou com erros para job %s: %s',
-                job_id, browser_result.error_message,
-            )
-        else:
-            all_logs.append(
-                f'Agente de navegacao finalizado com sucesso. '
-                f'Screenshots capturados: {len(browser_result.screenshots)}'
+            browser_agent = BrowserAgent(
+                base_url=project_base_url,
+                credentials=credentials,
+                headless=True,
+                timeout=llm_config.get('timeout', 120),
             )
 
-        screenshots = browser_result.screenshots
+            # Monta os parametros de execucao, incluindo config do LLM
+            exec_params = dict(job_execution_params or {})
+            exec_params['max_steps'] = calculated_max_steps
+            if llm_config.get('api_key'):
+                exec_params['llm_config'] = {
+                    'provider': llm_config.get('provider'),
+                    'model': llm_config.get('model'),
+                    'api_key': llm_config.get('api_key'),
+                    'temperature': llm_config.get('temperature', 0.7),
+                }
+
+            # Progresso: 20% — browser iniciado
+            _update_progress(execution_id, 20, db)
+
+            # Executa o agente (async -> sync bridge)
+            prompt = job_agent_prompt
+            browser_result = _run_async(browser_agent.run(
+                prompt=prompt,
+                execution_params=exec_params,
+            ))
+
+            # Adiciona logs do browser ao exec_logger
+            for log_line in browser_result.logs:
+                exec_logger.info('browser', log_line)
+
+            if not browser_result.success:
+                # Browser rodou mas com erros — CRITICAL, nao FATAL
+                # Ainda pode ter capturado screenshots parcialmente
+                exec_logger.error(
+                    'browser',
+                    f'Agente de navegacao finalizou com erros: {browser_result.error_message}',
+                    {'error_message': browser_result.error_message},
+                )
+                logger.warning(
+                    'BrowserAgent finalizou com erros para job %s: %s',
+                    job_id, browser_result.error_message,
+                )
+            else:
+                exec_logger.info(
+                    'browser',
+                    f'Agente de navegacao finalizado com sucesso. '
+                    f'Screenshots capturados: {len(browser_result.screenshots)}',
+                )
+
+            screenshots = browser_result.screenshots
+
+            # Progresso: 40% — navegacao concluida
+            _update_progress(execution_id, 40, db)
+
+        except FatalExecutionError:
+            raise
+        except Exception as e:
+            # Browser nao iniciou ou falhou catastroficamente — FATAL
+            tb = traceback.format_exc()
+            exec_logger.fatal(
+                'browser',
+                f'Falha fatal ao iniciar/executar agente de navegacao: {str(e)}',
+                {'traceback': tb},
+            )
+            logger.exception('BrowserAgent falhou fatalmente para job %s', job_id)
+            raise FatalExecutionError(
+                f'Agente de navegacao falhou fatalmente: {str(e)}'
+            ) from e
 
         # -----------------------------------------------------------------
-        # 6. Salva screenshots no MinIO
+        # 6. FASE: Screenshots — Salva no MinIO
+        # Nivel de erro: WARNING (se falhar, PDF e gerado sem screenshots)
         # -----------------------------------------------------------------
         from app.shared.storage import StorageClient
 
@@ -734,60 +929,82 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
         screenshots_path: str | None = None
 
         if screenshots:
-            all_logs.append(f'Salvando {len(screenshots)} screenshots no storage...')
+            try:
+                exec_logger.info(
+                    'screenshots',
+                    f'Salvando {len(screenshots)} screenshots no storage...',
+                )
 
-            from app.modules.agents.screenshot_manager import ScreenshotManager
+                from app.modules.agents.screenshot_manager import ScreenshotManager
 
-            screenshot_manager = ScreenshotManager(storage_client)
+                screenshot_manager = ScreenshotManager(storage_client)
 
-            saved_paths = screenshot_manager.save_screenshots(
-                screenshots=screenshots,
-                execution_id=str(execution_id),
-            )
+                saved_paths = screenshot_manager.save_screenshots(
+                    screenshots=screenshots,
+                    execution_id=str(execution_id),
+                )
 
-            screenshots_path = f'screenshots/{execution_id}/'
-            all_logs.append(f'Screenshots salvos: {len(saved_paths)} arquivos')
+                screenshots_path = f'screenshots/{execution_id}/'
+                exec_logger.info(
+                    'screenshots',
+                    f'Screenshots salvos: {len(saved_paths)} arquivos',
+                    {'saved_count': len(saved_paths), 'path': screenshots_path},
+                )
 
-            # Atualiza a Execution com o caminho dos screenshots
-            execution_repo.update_status(
-                execution_id=execution_id,
-                status='running',
-                screenshots_path=screenshots_path,
-                logs='\n'.join(all_logs),
-            )
+                # Atualiza a Execution com o caminho dos screenshots
+                execution_repo.update_status(
+                    execution_id=execution_id,
+                    status='running',
+                    screenshots_path=screenshots_path,
+                    logs=exec_logger.to_json(),
+                )
+            except Exception as e:
+                # WARNING: falha ao salvar screenshots; continua sem eles
+                tb = traceback.format_exc()
+                exec_logger.warning(
+                    'screenshots',
+                    f'Falha ao salvar screenshots no storage: {str(e)}',
+                    {'traceback': tb},
+                )
+                logger.warning(
+                    'Falha ao salvar screenshots para job %s: %s', job_id, str(e),
+                )
         else:
-            all_logs.append('Nenhum screenshot capturado pelo agente')
+            exec_logger.info('screenshots', 'Nenhum screenshot capturado pelo agente')
+
+        # Progresso: 60% — screenshots salvos
+        _update_progress(execution_id, 60, db)
 
         # -----------------------------------------------------------------
-        # 7. Analisa screenshots com VisionAnalyzer (LLM)
+        # 7. FASE: Analise LLM — VisionAnalyzer
+        # Nivel de erro: WARNING (se falhar, PDF e gerado sem analise)
         # -----------------------------------------------------------------
-        # Seleciona screenshots mais relevantes via ScreenshotClassifier
-        # e envia para o LLM analisar com otimizacao de tokens.
         extracted_data: dict | None = None
         analysis_text: str = ''
 
         if screenshots and llm_config.get('api_key'):
-            # Selecao inteligente via ScreenshotClassifier (9.2.3)
-            from app.modules.agents.screenshot_classifier import ScreenshotClassifier
-
-            classifier = ScreenshotClassifier()
-            classified = classifier.classify_and_select(
-                screenshots, max_screenshots=len(screenshots), logs=all_logs,
-            )
-            analysis_classified = classifier.select_for_analysis(
-                classified, max_analysis=3,
-            )
-            analysis_screenshots = [c.image_bytes for c in analysis_classified]
-
-            all_logs.append(
-                f'Iniciando analise visual com LLM '
-                f'({len(analysis_screenshots)} de {len(screenshots)} screenshots, '
-                f'selecionados por relevancia)...'
-            )
-
-            from app.modules.agents.vision_analyzer import VisionAnalyzer
-
             try:
+                # Selecao inteligente via ScreenshotClassifier (9.2.3)
+                from app.modules.agents.screenshot_classifier import ScreenshotClassifier
+
+                classifier = ScreenshotClassifier()
+                classified = classifier.classify_and_select(
+                    screenshots, max_screenshots=len(screenshots), logs=[],
+                )
+                analysis_classified = classifier.select_for_analysis(
+                    classified, max_analysis=3,
+                )
+                analysis_screenshots = [c.image_bytes for c in analysis_classified]
+
+                exec_logger.info(
+                    'analysis',
+                    f'Iniciando analise visual com LLM '
+                    f'({len(analysis_screenshots)} de {len(screenshots)} screenshots, '
+                    f'selecionados por relevancia)...',
+                )
+
+                from app.modules.agents.vision_analyzer import VisionAnalyzer
+
                 analyzer = VisionAnalyzer.from_llm_config(llm_config)
 
                 analysis_metadata = {
@@ -806,37 +1023,52 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                 analysis_text = analysis_result.text
                 extracted_data = analysis_result.extracted_data
 
-                all_logs.append(
-                    f'Analise visual concluida. Tokens usados: {analysis_result.tokens_used}'
+                exec_logger.info(
+                    'analysis',
+                    f'Analise visual concluida. Tokens usados: {analysis_result.tokens_used}',
+                    {
+                        'tokens_used': analysis_result.tokens_used,
+                        'has_extracted_data': extracted_data is not None,
+                    },
                 )
                 if extracted_data:
-                    all_logs.append(
-                        f'Dados extraidos: {json.dumps(extracted_data, ensure_ascii=False)[:200]}'
+                    exec_logger.info(
+                        'analysis',
+                        f'Dados extraidos: {json.dumps(extracted_data, ensure_ascii=False)[:200]}',
                     )
                 else:
-                    all_logs.append('Nenhum dado estruturado extraido')
+                    exec_logger.info('analysis', 'Nenhum dado estruturado extraido')
 
             except Exception as e:
-                error_msg = f'Erro na analise visual: {str(e)}'
-                all_logs.append(error_msg)
-                logger.error('VisionAnalyzer falhou para job %s: %s', job_id, str(e))
+                # WARNING: LLM falhou; continua sem analise
+                tb = traceback.format_exc()
+                exec_logger.warning(
+                    'analysis',
+                    f'Falha na analise visual (LLM): {str(e)}',
+                    {'traceback': tb, 'error_type': type(e).__name__},
+                )
+                logger.warning('VisionAnalyzer falhou para job %s: %s', job_id, str(e))
         elif not llm_config.get('api_key'):
-            all_logs.append('Analise visual ignorada: API key do LLM nao configurada')
+            exec_logger.info('analysis', 'Analise visual ignorada: API key do LLM nao configurada')
         else:
-            all_logs.append('Analise visual ignorada: nenhum screenshot disponivel')
+            exec_logger.info('analysis', 'Analise visual ignorada: nenhum screenshot disponivel')
+
+        # Progresso: 75% — analise concluida
+        _update_progress(execution_id, 75, db)
 
         # -----------------------------------------------------------------
-        # 8. Gera PDF com PDFGenerator
+        # 8. FASE: PDF — Gera relatorio com PDFGenerator
+        # Nivel de erro: WARNING (se falhar, execucao e success sem PDF)
         # -----------------------------------------------------------------
         pdf_path: str | None = None
 
         if screenshots:
-            all_logs.append('Gerando relatorio PDF...')
-
-            from app.modules.agents.pdf_generator import PDFGenerator
-            from app.modules.agents.llm_provider import AnalysisResult
-
             try:
+                exec_logger.info('pdf', 'Gerando relatorio PDF...')
+
+                from app.modules.agents.pdf_generator import PDFGenerator
+                from app.modules.agents.llm_provider import AnalysisResult
+
                 # Cria AnalysisResult para o PDFGenerator
                 pdf_analysis = AnalysisResult(
                     text=analysis_text or 'Analise visual nao disponivel.',
@@ -859,7 +1091,11 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                     metadata=pdf_metadata,
                 )
 
-                all_logs.append(f'PDF gerado com sucesso ({len(pdf_bytes)} bytes)')
+                exec_logger.info(
+                    'pdf',
+                    f'PDF gerado com sucesso ({len(pdf_bytes)} bytes)',
+                    {'size_bytes': len(pdf_bytes)},
+                )
 
                 # Salva no MinIO (reutiliza storage_client ja inicializado)
                 pdf_path = PDFGenerator.save_to_storage(
@@ -868,25 +1104,39 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                     storage_client=storage_client,
                 )
 
-                all_logs.append(f'PDF salvo no storage: {pdf_path}')
+                exec_logger.info(
+                    'pdf',
+                    f'PDF salvo no storage: {pdf_path}',
+                    {'path': pdf_path},
+                )
 
             except Exception as e:
-                error_msg = f'Erro ao gerar/salvar PDF: {str(e)}'
-                all_logs.append(error_msg)
-                logger.error('PDFGenerator falhou para job %s: %s', job_id, str(e))
+                # WARNING: PDF falhou; execucao ainda e success
+                tb = traceback.format_exc()
+                exec_logger.warning(
+                    'pdf',
+                    f'Falha ao gerar/salvar PDF: {str(e)}',
+                    {'traceback': tb},
+                )
+                logger.warning('PDFGenerator falhou para job %s: %s', job_id, str(e))
         else:
-            all_logs.append('Geracao de PDF ignorada: nenhum screenshot disponivel')
+            exec_logger.info('pdf', 'Geracao de PDF ignorada: nenhum screenshot disponivel')
+
+        # Progresso: 90% — PDF gerado
+        _update_progress(execution_id, 90, db)
 
         # -----------------------------------------------------------------
-        # 9. Entrega via DeliveryService (exceto dry_run)
+        # 9. FASE: Delivery — Entrega via canais configurados
+        # Nivel de erro: INFO (delivery e best-effort; execucao e success)
         # -----------------------------------------------------------------
         if not is_dry_run:
             # Busca configuracoes de entrega ativas do job
             active_delivery_configs = delivery_repo.get_active_configs_by_job(job_uuid)
 
             if active_delivery_configs:
-                all_logs.append(
-                    f'Iniciando entrega para {len(active_delivery_configs)} canal(is)...'
+                exec_logger.info(
+                    'delivery',
+                    f'Iniciando entrega para {len(active_delivery_configs)} canal(is)...',
                 )
 
                 try:
@@ -909,31 +1159,60 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                     sent_count = sum(1 for dl in delivery_logs if dl.status == 'sent')
                     failed_count = sum(1 for dl in delivery_logs if dl.status == 'failed')
 
-                    all_logs.append(
-                        f'Entrega concluida: {sent_count} enviado(s), {failed_count} falha(s)'
-                    )
+                    if failed_count > 0:
+                        exec_logger.warning(
+                            'delivery',
+                            f'Entrega parcial: {sent_count} enviado(s), {failed_count} falha(s)',
+                            {'sent': sent_count, 'failed': failed_count},
+                        )
+                    else:
+                        exec_logger.info(
+                            'delivery',
+                            f'Entrega concluida: {sent_count} enviado(s)',
+                            {'sent': sent_count},
+                        )
 
                 except Exception as e:
-                    error_msg = f'Erro durante entrega: {str(e)}'
-                    all_logs.append(error_msg)
-                    logger.error('DeliveryService falhou para job %s: %s', job_id, str(e))
+                    # INFO: delivery falhou, mas execucao e success
+                    tb = traceback.format_exc()
+                    exec_logger.warning(
+                        'delivery',
+                        f'Falha na entrega: {str(e)}',
+                        {'traceback': tb},
+                    )
+                    logger.warning('DeliveryService falhou para job %s: %s', job_id, str(e))
             else:
-                all_logs.append('Nenhuma configuracao de entrega ativa para este job')
+                exec_logger.info('delivery', 'Nenhuma configuracao de entrega ativa para este job')
         else:
-            all_logs.append('Entrega ignorada (dry run)')
+            exec_logger.info('delivery', 'Entrega ignorada (dry run)')
 
         # -----------------------------------------------------------------
-        # 10. Atualiza Execution para success
+        # 10. Finaliza: Atualiza Execution para success
         # -----------------------------------------------------------------
         finished_at = utc_now()
         duration_seconds = int((finished_at - started_at).total_seconds())
 
-        all_logs.append(f'Execucao concluida com sucesso em {duration_seconds}s')
+        # Determina status final: sempre success se chegou aqui
+        # (erros FATAL interrompem o fluxo antes deste ponto)
+        final_status = 'success'
+        if exec_logger.has_warnings():
+            exec_logger.info(
+                'finalize',
+                f'Execucao concluida com avisos em {duration_seconds}s',
+            )
+        else:
+            exec_logger.info(
+                'finalize',
+                f'Execucao concluida com sucesso em {duration_seconds}s',
+            )
+
+        # Progresso: 100% — concluido
+        _update_progress(execution_id, 100, db)
 
         execution_repo.update_status(
             execution_id=execution_id,
-            status='success',
-            logs='\n'.join(all_logs),
+            status=final_status,
+            logs=exec_logger.to_json(),
             extracted_data=extracted_data,
             screenshots_path=screenshots_path,
             pdf_path=pdf_path,
@@ -955,6 +1234,7 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             'has_extracted_data': extracted_data is not None,
             'has_pdf': pdf_path is not None,
             'is_dry_run': is_dry_run,
+            'has_warnings': exec_logger.has_warnings(),
         }
 
     except self.MaxRetriesExceededError:
@@ -967,6 +1247,56 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
             'success': False,
             'job_id': job_id,
             'error': 'Maximo de retries esgotado — semaforo de execucoes permanece cheio.',
+        }
+
+    except FatalExecutionError as fatal_err:
+        # Erro FATAL: execucao deve ser marcada como failed
+        error_msg = str(fatal_err)
+        logger.error('Erro FATAL na execucao do job %s: %s', job_id, error_msg)
+
+        if execution_id:
+            try:
+                finished_at = utc_now()
+                duration_seconds = (
+                    int((finished_at - started_at).total_seconds())
+                    if started_at
+                    else None
+                )
+
+                exec_logger.fatal('finalize', f'Execucao encerrada por erro fatal: {error_msg}')
+
+                execution_repo.update_status(
+                    execution_id=execution_id,
+                    status='failed',
+                    logs=exec_logger.to_json(),
+                    finished_at=finished_at,
+                    duration_seconds=duration_seconds,
+                )
+                logger.info(
+                    'Execution %s atualizada para failed (FATAL)', str(execution_id),
+                )
+
+                # Notificacao de falha (11.3.4)
+                send_failure_notification(
+                    job_id=job_uuid,
+                    job_name=job_name,
+                    execution_id=execution_id,
+                    error_message=error_msg,
+                    notify_on_failure=notify_on_failure,
+                )
+
+            except Exception as update_err:
+                logger.error(
+                    'Falha ao atualizar Execution %s para failed: %s',
+                    str(execution_id), str(update_err),
+                )
+
+        return {
+            'success': False,
+            'execution_id': str(execution_id) if execution_id else None,
+            'job_id': job_id,
+            'error': error_msg,
+            'error_level': 'FATAL',
         }
 
     except Exception as e:
@@ -983,19 +1313,29 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                     else None
                 )
 
-                # Tenta preservar logs coletados ate o ponto da falha
-                all_logs.append(f'ERRO FATAL: {str(e)}')
+                # Preserva logs coletados ate o ponto da falha
+                exec_logger.fatal('finalize', f'Erro inesperado: {str(e)}')
 
                 execution_repo.update_status(
                     execution_id=execution_id,
                     status='failed',
-                    logs='\n'.join(all_logs),
+                    logs=exec_logger.to_json(),
                     finished_at=finished_at,
                     duration_seconds=duration_seconds,
                 )
                 logger.info(
                     'Execution %s atualizada para failed', str(execution_id),
                 )
+
+                # Notificacao de falha (11.3.4)
+                send_failure_notification(
+                    job_id=job_uuid,
+                    job_name=job_name,
+                    execution_id=execution_id,
+                    error_message=str(e),
+                    notify_on_failure=notify_on_failure,
+                )
+
             except Exception as update_err:
                 logger.error(
                     'Falha ao atualizar Execution %s para failed: %s',

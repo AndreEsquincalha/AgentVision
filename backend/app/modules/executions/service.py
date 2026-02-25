@@ -376,13 +376,32 @@ class ExecutionService:
                 execution_id,
             )
 
-        # Monta log de cancelamento
+        # Monta log de cancelamento (suporta formato JSON estruturado e legado)
         now = utc_now()
-        cancel_log = f'Execucao cancelada pelo usuario em {now.isoformat()}'
         existing_logs = execution.logs or ''
-        updated_logs = (
-            f'{existing_logs}\n{cancel_log}' if existing_logs else cancel_log
-        )
+        updated_logs: str
+
+        try:
+            import json
+            parsed = json.loads(existing_logs)
+            if isinstance(parsed, list):
+                # Formato JSON estruturado: adiciona entrada de cancelamento
+                parsed.append({
+                    'timestamp': now.isoformat(),
+                    'level': 'INFO',
+                    'phase': 'finalize',
+                    'message': 'Execucao cancelada pelo usuario',
+                    'metadata': None,
+                })
+                updated_logs = json.dumps(parsed, ensure_ascii=False)
+            else:
+                raise ValueError('Formato inesperado')
+        except (json.JSONDecodeError, TypeError, ValueError):
+            # Formato legado (texto simples)
+            cancel_log = f'Execucao cancelada pelo usuario em {now.isoformat()}'
+            updated_logs = (
+                f'{existing_logs}\n{cancel_log}' if existing_logs else cancel_log
+            )
 
         # Calcula duracao se a execucao tinha started_at
         duration_seconds: int | None = None

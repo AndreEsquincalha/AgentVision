@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { CronScheduleInput } from '@/components/CronScheduleInput';
 import { useCreateJob, useUpdateJob } from '@/hooks/useJobs';
 import { useProjects } from '@/hooks/useProjects';
@@ -108,6 +109,7 @@ const jobFormSchema = z.object({
       (val) => !val || isValidJson(val),
       'JSON inválido. Verifique a sintaxe do JSON.'
     ),
+  notify_on_failure: z.boolean(),
   delivery_configs: z.array(deliveryConfigSchema).optional(),
 });
 
@@ -156,6 +158,7 @@ const JobForm = memo(function JobForm({
       execution_params: job?.execution_params
         ? JSON.stringify(job.execution_params, null, 2)
         : '',
+      notify_on_failure: job?.notify_on_failure ?? true,
       delivery_configs: job?.delivery_configs?.map((dc) => ({
         channel_type: dc.channel_type,
         recipients: dc.recipients.join(', '),
@@ -241,6 +244,7 @@ const JobForm = memo(function JobForm({
         agent_prompt: data.agent_prompt,
         prompt_template_id: data.prompt_template_id || undefined,
         execution_params: executionParams,
+        notify_on_failure: data.notify_on_failure,
         delivery_configs: data.delivery_configs?.map((dc) => ({
           channel_type: dc.channel_type as 'email' | 'onedrive' | 'webhook',
           recipients: dc.recipients
@@ -453,6 +457,41 @@ const JobForm = memo(function JobForm({
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+
+          <Separator className="bg-[#2E3348]" />
+
+          {/* Secao: Notificacoes */}
+          <div>
+            <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-[#9CA3AF]">
+              Notificacoes
+            </h3>
+            <div className="flex items-center justify-between rounded-lg border border-[#2E3348] bg-[#242838] px-4 py-3">
+              <div>
+                <Label
+                  htmlFor="notify_on_failure"
+                  className="text-sm font-medium text-[#F9FAFB]"
+                >
+                  Notificar em caso de falha
+                </Label>
+                <p className="mt-0.5 text-xs text-[#6B7280]">
+                  Envia notificacao pelos canais de entrega quando a execucao falhar.
+                </p>
+              </div>
+              <Controller
+                name="notify_on_failure"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    id="notify_on_failure"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="data-[state=checked]:bg-[#6366F1]"
+                    aria-label="Notificar em caso de falha"
+                  />
+                )}
+              />
             </div>
           </div>
 

@@ -37,12 +37,21 @@ export function useExecutions(params: ExecutionListParams = {}) {
 
 /**
  * Hook para buscar os detalhes de uma execucao especifica.
+ * Quando a execucao esta em andamento (running/pending),
+ * revalida automaticamente a cada 3 segundos para atualizar o progresso.
  */
 export function useExecution(id: string) {
   return useQuery<ExecutionDetail>({
     queryKey: EXECUTION_KEYS.detail(id),
     queryFn: () => executionsService.getExecution(id),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === 'running' || status === 'pending') {
+        return 3000;
+      }
+      return false;
+    },
   });
 }
 

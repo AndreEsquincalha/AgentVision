@@ -9,21 +9,22 @@ import {
   Eye,
   FileDown,
   Code,
-  ScrollText,
   Truck,
-  ChevronDown,
-  ChevronUp,
   RotateCcw,
   Loader2,
   Download,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useExecution, useScreenshots, usePdfUrl, useRetryDelivery, useDeleteExecution } from '@/hooks/useExecutions';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
 import type { ColumnDef } from '@/components/ui/DataTable';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ExecutionProgressBar } from '@/components/ui/ExecutionProgressBar';
+import { StructuredLogs } from '@/components/ui/StructuredLogs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -57,7 +58,6 @@ export default function ExecutionDetail() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [jsonExpanded, setJsonExpanded] = useState(false);
-  const [logsExpanded, setLogsExpanded] = useState(false);
   const [retryingDeliveryId, setRetryingDeliveryId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -111,10 +111,6 @@ export default function ExecutionDetail() {
 
   const handleToggleJson = useCallback(() => {
     setJsonExpanded((prev) => !prev);
-  }, []);
-
-  const handleToggleLogs = useCallback(() => {
-    setLogsExpanded((prev) => !prev);
   }, []);
 
   const handleRetryDelivery = useCallback(
@@ -322,6 +318,12 @@ export default function ExecutionDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Barra de progresso (apenas para execucoes em andamento) */}
+      <ExecutionProgressBar
+        progressPercent={execution.progress_percent}
+        status={execution.status}
+      />
 
       {/* Card: Informações Gerais */}
       <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
@@ -572,66 +574,11 @@ export default function ExecutionDetail() {
         )}
       </div>
 
-      {/* Secao: Logs */}
-      <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ScrollText className="size-5 text-[#F59E0B]" />
-            <h2 className="text-base font-semibold text-[#F9FAFB]">
-              Logs de Execução
-            </h2>
-          </div>
-
-          {execution.logs && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleLogs}
-              className="text-[#9CA3AF] hover:bg-[#2A2F42] hover:text-white"
-              aria-label={logsExpanded ? 'Recolher logs' : 'Expandir logs'}
-            >
-              {logsExpanded ? (
-                <>
-                  <ChevronUp className="size-4" />
-                  Recolher
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="size-4" />
-                  Expandir
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-
-        {!execution.logs ? (
-          <div className="py-4 text-center">
-            <ScrollText className="mx-auto mb-2 size-8 text-[#6B7280]" />
-            <p className="text-sm text-[#9CA3AF]">
-              Nenhum log disponível
-            </p>
-            <p className="mt-1 text-xs text-[#6B7280]">
-              Os logs serão gerados durante a execução.
-            </p>
-          </div>
-        ) : (
-          <div
-            className={`overflow-hidden transition-all duration-300 ${
-              logsExpanded ? 'max-h-[none]' : 'max-h-64'
-            }`}
-          >
-            <pre className="overflow-auto rounded-lg border border-[#2E3348] bg-[#242838] p-4 font-mono text-xs leading-relaxed text-[#F9FAFB] whitespace-pre-wrap">
-              {execution.logs}
-            </pre>
-          </div>
-        )}
-
-        {/* Indicador de conteudo truncado */}
-        {execution.logs && !logsExpanded && (
-          <div className="relative -mt-8 h-8 bg-gradient-to-t from-[#1A1D2E] to-transparent" />
-        )}
-      </div>
+      {/* Secao: Logs (estruturados ou fallback para texto puro) */}
+      <StructuredLogs
+        structuredLogs={execution.structured_logs}
+        rawLogs={execution.logs}
+      />
 
       {/* Secao: Entregas */}
       <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E] p-6">

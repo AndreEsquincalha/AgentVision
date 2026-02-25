@@ -86,6 +86,10 @@ class JobCreate(BaseModel):
         JobPriority.normal,
         description='Prioridade do job (low, normal, high)',
     )
+    notify_on_failure: bool = Field(
+        True,
+        description='Se deve notificar em caso de falha na execucao',
+    )
     delivery_configs: list[DeliveryConfigInline] | None = Field(
         None,
         description='Configuracoes de entrega a serem criadas junto com o job',
@@ -130,6 +134,10 @@ class JobUpdate(BaseModel):
     priority: JobPriority | None = Field(
         None,
         description='Prioridade do job (low, normal, high)',
+    )
+    notify_on_failure: bool | None = Field(
+        None,
+        description='Se deve notificar em caso de falha na execucao',
     )
     is_active: bool | None = Field(None)
 
@@ -205,6 +213,7 @@ class JobResponse(BaseModel):
     prompt_template_id: uuid.UUID | None = None
     execution_params: dict | None = None
     priority: str = 'normal'
+    notify_on_failure: bool = True
     is_active: bool
     next_execution: datetime | None = None
     delivery_configs: list[DeliveryConfigResponse] = []
@@ -227,8 +236,11 @@ class JobResponse(BaseModel):
                 if dc.deleted_at is None
             ]
 
-        # Acessa campo priority com seguranca (pode nao existir em migracoes pendentes)
+        # Acessa campos com seguranca (podem nao existir em migracoes pendentes)
         priority: str = getattr(job, 'priority', 'normal') or 'normal'
+        notify_on_failure: bool = getattr(job, 'notify_on_failure', True)
+        if notify_on_failure is None:
+            notify_on_failure = True
 
         return cls(
             id=job.id,
@@ -240,6 +252,7 @@ class JobResponse(BaseModel):
             prompt_template_id=job.prompt_template_id,
             execution_params=job.execution_params,
             priority=priority,
+            notify_on_failure=notify_on_failure,
             is_active=job.is_active,
             next_execution=next_execution,
             delivery_configs=delivery_config_responses,

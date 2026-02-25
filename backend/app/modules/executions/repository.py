@@ -237,6 +237,39 @@ class ExecutionRepository:
         self._db.refresh(execution)
         return execution
 
+    def update_progress(
+        self,
+        execution_id: uuid.UUID,
+        progress_percent: int,
+        logs: str | None = None,
+    ) -> Execution | None:
+        """
+        Atualiza o progresso percentual de uma execucao.
+
+        Opcionalmente atualiza os logs junto com o progresso.
+
+        Args:
+            execution_id: ID (UUID) da execucao.
+            progress_percent: Valor de progresso (0-100).
+            logs: Logs atualizados (opcional).
+
+        Returns:
+            Execucao atualizada ou None se nao encontrada.
+        """
+        stmt = select(Execution).where(Execution.id == execution_id)
+        execution = self._db.execute(stmt).scalar_one_or_none()
+        if not execution:
+            return None
+
+        execution.progress_percent = max(0, min(100, progress_percent))
+
+        if logs is not None:
+            execution.logs = logs
+
+        self._db.commit()
+        self._db.refresh(execution)
+        return execution
+
     def count_by_status(
         self,
         date_from: datetime | None = None,

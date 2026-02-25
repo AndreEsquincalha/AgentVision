@@ -65,6 +65,13 @@ class Job(SoftDeleteModel):
         default='normal',
     )
 
+    # --- Notificacao em caso de falha ---
+    notify_on_failure: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
     # --- Status ---
     is_active: Mapped[bool] = mapped_column(
         Boolean,

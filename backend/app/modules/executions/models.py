@@ -64,6 +64,13 @@ class Execution(BaseModel):
         default=None,
     )
 
+    # --- Progresso da execucao (0-100%) ---
+    progress_percent: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
     # --- Flag de dry run ---
     is_dry_run: Mapped[bool] = mapped_column(
         Boolean,

@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime
 
@@ -36,6 +37,52 @@ class ExecutionFilter(BaseModel):
     )
 
 
+class StructuredLogEntry(BaseModel):
+    """Schema de resposta para uma entrada de log estruturado."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    timestamp: str
+    level: str
+    phase: str
+    message: str
+    metadata: dict | None = None
+
+
+def _parse_structured_logs(logs: str | None) -> list[StructuredLogEntry] | None:
+    """
+    Tenta parsear logs como JSON estruturado.
+
+    Se o conteudo for JSON valido (lista de objetos), retorna as entradas
+    parseadas. Se for texto simples (formato legado), retorna None.
+
+    Args:
+        logs: String de logs (JSON ou texto).
+
+    Returns:
+        Lista de entradas estruturadas ou None se formato legado.
+    """
+    if not logs:
+        return None
+    try:
+        data = json.loads(logs)
+        if isinstance(data, list) and len(data) > 0:
+            return [
+                StructuredLogEntry(
+                    timestamp=item.get('timestamp', ''),
+                    level=item.get('level', 'INFO'),
+                    phase=item.get('phase', 'unknown'),
+                    message=item.get('message', ''),
+                    metadata=item.get('metadata'),
+                )
+                for item in data
+                if isinstance(item, dict)
+            ]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
 class ExecutionResponse(BaseModel):
     """
     Schema de resposta com dados da execucao.
@@ -50,8 +97,10 @@ class ExecutionResponse(BaseModel):
     job_name: str | None = None
     project_name: str | None = None
     status: str
+    progress_percent: int = 0
     celery_task_id: str | None = None
     logs: str | None = None
+    structured_logs: list[StructuredLogEntry] | None = None
     extracted_data: dict | None = None
     screenshots_path: str | None = None
     pdf_path: str | None = None
@@ -81,6 +130,11 @@ class ExecutionResponse(BaseModel):
         # Acessa campos novos com seguranca (podem nao existir em migracoes pendentes)
         celery_task_id: str | None = getattr(execution, 'celery_task_id', None)
         last_heartbeat: datetime | None = getattr(execution, 'last_heartbeat', None)
+        progress_percent: int = getattr(execution, 'progress_percent', 0) or 0
+
+        # Parseia logs estruturados se disponivel
+        raw_logs: str | None = execution.logs
+        structured = _parse_structured_logs(raw_logs)
 
         return cls(
             id=execution.id,
@@ -88,8 +142,10 @@ class ExecutionResponse(BaseModel):
             job_name=job_name,
             project_name=project_name,
             status=execution.status,
+            progress_percent=progress_percent,
             celery_task_id=celery_task_id,
-            logs=execution.logs,
+            logs=raw_logs,
+            structured_logs=structured,
             extracted_data=execution.extracted_data,
             screenshots_path=execution.screenshots_path,
             pdf_path=execution.pdf_path,
@@ -117,6 +173,7 @@ class ExecutionListItemResponse(BaseModel):
     job_name: str | None = None
     project_name: str | None = None
     status: str
+    progress_percent: int = 0
     is_dry_run: bool
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -138,12 +195,15 @@ class ExecutionListItemResponse(BaseModel):
             if hasattr(execution.job, 'project') and execution.job.project:
                 project_name = execution.job.project.name
 
+        progress_percent: int = getattr(execution, 'progress_percent', 0) or 0
+
         return cls(
             id=execution.id,
             job_id=execution.job_id,
             job_name=job_name,
             project_name=project_name,
             status=execution.status,
+            progress_percent=progress_percent,
             is_dry_run=execution.is_dry_run,
             started_at=execution.started_at,
             finished_at=execution.finished_at,
@@ -167,8 +227,10 @@ class ExecutionDetailResponse(BaseModel):
     job_name: str | None = None
     project_name: str | None = None
     status: str
+    progress_percent: int = 0
     celery_task_id: str | None = None
     logs: str | None = None
+    structured_logs: list[StructuredLogEntry] | None = None
     extracted_data: dict | None = None
     screenshots_path: str | None = None
     pdf_path: str | None = None
@@ -207,6 +269,11 @@ class ExecutionDetailResponse(BaseModel):
         # Acessa campos novos com seguranca (podem nao existir em migracoes pendentes)
         celery_task_id: str | None = getattr(execution, 'celery_task_id', None)
         last_heartbeat: datetime | None = getattr(execution, 'last_heartbeat', None)
+        progress_percent: int = getattr(execution, 'progress_percent', 0) or 0
+
+        # Parseia logs estruturados se disponivel
+        raw_logs: str | None = execution.logs
+        structured = _parse_structured_logs(raw_logs)
 
         return cls(
             id=execution.id,
@@ -214,8 +281,10 @@ class ExecutionDetailResponse(BaseModel):
             job_name=job_name,
             project_name=project_name,
             status=execution.status,
+            progress_percent=progress_percent,
             celery_task_id=celery_task_id,
-            logs=execution.logs,
+            logs=raw_logs,
+            structured_logs=structured,
             extracted_data=execution.extracted_data,
             screenshots_path=execution.screenshots_path,
             pdf_path=execution.pdf_path,

@@ -88,6 +88,48 @@ class StorageClient:
             logger.error('Erro ao enviar arquivo %s: %s', key, e)
             raise
 
+    def upload_file_from_path(
+        self,
+        file_path: str,
+        key: str,
+        content_type: str = 'application/octet-stream',
+        bucket: str | None = None,
+    ) -> str:
+        """
+        Faz upload de um arquivo a partir de um caminho no disco.
+
+        Util para arquivos grandes onde manter tudo em memoria nao e desejavel.
+        O boto3 usa upload_file que faz streaming do disco para o S3.
+
+        Args:
+            file_path: Caminho absoluto do arquivo local.
+            key: Caminho/nome do arquivo no bucket.
+            content_type: Tipo MIME do arquivo.
+            bucket: Nome do bucket (usa padrao se nao informado).
+
+        Returns:
+            Caminho do arquivo no storage.
+        """
+        target_bucket = bucket or self._bucket
+        try:
+            self._client.upload_file(
+                Filename=file_path,
+                Bucket=target_bucket,
+                Key=key,
+                ExtraArgs={'ContentType': content_type},
+            )
+            logger.info(
+                'Arquivo enviado via streaming: %s/%s (origem: %s)',
+                target_bucket, key, file_path,
+            )
+            return key
+        except ClientError as e:
+            logger.error(
+                'Erro ao enviar arquivo %s a partir de %s: %s',
+                key, file_path, e,
+            )
+            raise
+
     def download_file(
         self,
         key: str,

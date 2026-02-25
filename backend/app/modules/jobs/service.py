@@ -144,6 +144,8 @@ class JobService:
             'agent_prompt': data.agent_prompt,
             'prompt_template_id': data.prompt_template_id,
             'execution_params': data.execution_params,
+            'priority': data.priority.value if data.priority else 'normal',
+            'notify_on_failure': data.notify_on_failure,
         }
 
         # Cria o job
@@ -342,7 +344,8 @@ class JobService:
 
         fields = [
             'name', 'cron_expression', 'agent_prompt',
-            'prompt_template_id', 'execution_params', 'is_active',
+            'prompt_template_id', 'execution_params', 'priority',
+            'notify_on_failure', 'is_active',
         ]
 
         for field in fields:

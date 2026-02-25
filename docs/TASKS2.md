@@ -319,33 +319,33 @@
 
 ### 11.1 Geração Resiliente de PDFs
 
-- [ ] **11.1.1** Implementar geração de PDF com fallback progressivo
+- [X] **11.1.1** Implementar geração de PDF com fallback progressivo
   - Cenário ideal: screenshots + análise LLM + dados extraídos → PDF completo
   - Fallback 1: screenshots + sem análise → PDF com screenshots e metadados
   - Fallback 2: sem screenshots + análise LLM → PDF com texto da análise
   - Fallback 3: erro total → PDF mínimo com logs de execução e status de erro
   - Nunca falhar completamente — sempre gerar algum PDF informativo
 
-- [ ] **11.1.2** Adicionar validação de screenshots antes de incluir no PDF
+- [X] **11.1.2** Adicionar validação de screenshots antes de incluir no PDF
   - Verificar que o bytes é uma imagem válida (magic bytes check)
   - Verificar tamanho mínimo (> 1KB) e máximo (< 10MB)
   - Se imagem corrompida, logar warning e pular (não crashar o PDF inteiro)
   - Redimensionar imagens maiores que 1920x1080 para caber na página
 
-- [ ] **11.1.3** Implementar tratamento de conteúdo dinâmico no PDF
+- [X] **11.1.3** Implementar tratamento de conteúdo dinâmico no PDF
   - Truncar textos muito longos com `... [texto truncado, ver log completo]`
   - Escapar caracteres especiais (LaTeX/ReportLab) que podem quebrar o build
   - Tabelas com muitas colunas: auto-ajustar largura ou dividir em múltiplas páginas
   - Lidar com UTF-8 corretamente (acentos, caracteres especiais)
 
-- [ ] **11.1.4** Adicionar retry na geração de PDF
+- [X] **11.1.4** Adicionar retry na geração de PDF
   - Se `PDFGenerator.generate()` falhar, tentar novamente com:
     - 1º retry: mesmos parâmetros (pode ser erro transiente)
     - 2º retry: sem imagens (gerar PDF texto-only)
     - 3º retry: PDF mínimo (apenas metadados + error log)
   - Máximo de 3 tentativas com log de cada falha
 
-- [ ] **11.1.5** Implementar streaming de PDF para MinIO (evitar OOM)
+- [X] **11.1.5** Implementar streaming de PDF para MinIO (evitar OOM)
   - Atualmente: PDF gerado em memória via `BytesIO`, depois upload
   - Melhoria: para PDFs grandes (>10MB), usar arquivo temporário:
     ```python
@@ -358,18 +358,18 @@
 
 ### 11.2 Melhorias no Conteúdo do PDF
 
-- [ ] **11.2.1** Adicionar seção de sumário executivo no início do PDF
+- [X] **11.2.1** Adicionar seção de sumário executivo no início do PDF
   - Gerado a partir do `extracted_data.summary` do LLM
   - Se análise não disponível, usar extracted_content do browser-use
   - Formato: 2-3 bullet points com as descobertas principais
   - Posicionar logo após a capa, antes dos screenshots
 
-- [ ] **11.2.2** Implementar seção de status/resultado visual
+- [X] **11.2.2** Implementar seção de status/resultado visual
   - Badge colorido de status: SUCCESS (verde), PARTIAL (amarelo), FAILED (vermelho)
   - Métricas visuais: duração, screenshots capturados, tokens usados
   - Timeline de execução: hora início → login → navegação → análise → conclusão
 
-- [ ] **11.2.3** Melhorar legendas dos screenshots
+- [X] **11.2.3** Melhorar legendas dos screenshots
   - Em vez de "Screenshot 1", "Screenshot 2", usar contexto:
     - "Página inicial - {url}"
     - "Após login - Dashboard"
@@ -377,7 +377,7 @@
   - Extrair contexto do log do browser-use (URLs visitadas, ações realizadas)
   - Timestamp em cada screenshot
 
-- [ ] **11.2.4** Adicionar marca d'água e metadados no PDF
+- [X] **11.2.4** Adicionar marca d'água e metadados no PDF
   - Marca d'água discreta: "Gerado por AgentVision"
   - Metadados PDF: autor, título, subject, keywords, creation date
   - Número de páginas no rodapé: "Página X de Y"
@@ -385,7 +385,7 @@
 
 ### 11.3 Tratamento de Erros no Pipeline de Execução
 
-- [ ] **11.3.1** Implementar error recovery granular na task `execute_job`
+- [X] **11.3.1** Implementar error recovery granular na task `execute_job`
   - Cada fase (browser, screenshots, análise, PDF, delivery) deve:
     - Ter seu próprio try/except
     - Logar o erro com stack trace
@@ -396,7 +396,7 @@
     - WARNING: LLM falha → gerar PDF sem análise
     - INFO: delivery falha → execução é success (delivery é best-effort)
 
-- [ ] **11.3.2** Implementar atualização parcial de progresso
+- [X] **11.3.2** Implementar atualização parcial de progresso
   - Atualizar `Execution.logs` a cada fase concluída (não esperar o final)
   - Adicionar campo `progress_percent` no model Execution (0-100)
   - Fases e percentuais:
@@ -409,7 +409,7 @@
     - 100%: Delivery executada / concluída
   - Frontend: progress bar na página de detalhes da execução
 
-- [ ] **11.3.3** Implementar log estruturado para execuções
+- [X] **11.3.3** Implementar log estruturado para execuções
   - Substituir `all_logs: list[str]` por log estruturado:
     ```python
     @dataclass
@@ -423,7 +423,7 @@
   - Serializar como JSON para o campo `Execution.logs`
   - Frontend: renderizar logs com cores por nível e agrupamento por fase
 
-- [ ] **11.3.4** Adicionar notificação de falhas críticas
+- [X] **11.3.4** Adicionar notificação de falhas críticas
   - Se uma execução falhar, verificar se há canal de notificação configurado
   - Enviar alerta com detalhes do erro (por email ou webhook)
   - Configurável por job: `notify_on_failure: bool` (default: true)

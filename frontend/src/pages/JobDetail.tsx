@@ -372,6 +372,20 @@ export default function JobDetail() {
               value={job.project_name ?? '-'}
             />
             <InfoRow
+              label="Notificar em falha"
+              value={
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    job.notify_on_failure
+                      ? 'bg-[#10B981]/10 text-[#10B981]'
+                      : 'bg-[#6B7280]/10 text-[#6B7280]'
+                  }`}
+                >
+                  {job.notify_on_failure ? 'Sim' : 'Nao'}
+                </span>
+              }
+            />
+            <InfoRow
               label="Criado em"
               value={formatDateTime(job.created_at)}
             />

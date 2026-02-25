@@ -88,6 +88,7 @@ export interface Job {
   prompt_template_id: string | null;
   execution_params: Record<string, unknown> | null;
   is_active: boolean;
+  notify_on_failure: boolean;
   delivery_configs?: DeliveryConfig[];
   next_execution?: string | null;
   created_at: string;
@@ -101,10 +102,27 @@ export interface JobCreate {
   agent_prompt: string;
   prompt_template_id?: string;
   execution_params?: Record<string, unknown>;
+  notify_on_failure?: boolean;
   delivery_configs?: DeliveryConfigCreate[];
 }
 
 export type JobUpdate = Partial<JobCreate>;
+
+// --- Tipos de logs estruturados ---
+
+export type LogLevel = 'INFO' | 'WARNING' | 'ERROR' | 'FATAL';
+
+export type LogPhase = 'browser' | 'screenshots' | 'analysis' | 'pdf' | 'delivery';
+
+export interface StructuredLogEntry {
+  timestamp: string;
+  level: LogLevel;
+  phase: LogPhase;
+  message: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+// --- Execuções ---
 
 export interface Execution {
   id: string;
@@ -112,7 +130,9 @@ export interface Execution {
   job_name?: string;
   project_name?: string;
   status: ExecutionStatus;
+  progress_percent: number;
   logs: string | null;
+  structured_logs: StructuredLogEntry[] | null;
   extracted_data: Record<string, unknown> | null;
   screenshots_path: string | null;
   pdf_path: string | null;
