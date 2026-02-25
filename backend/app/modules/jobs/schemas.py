@@ -1,10 +1,20 @@
 import uuid
 from datetime import datetime
 
+from enum import Enum
+
 from croniter import croniter
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.shared.schemas import PaginatedResponse
+
+
+class JobPriority(str, Enum):
+    """Enum de prioridade de jobs."""
+
+    low = 'low'
+    normal = 'normal'
+    high = 'high'
 
 
 class DeliveryConfigInline(BaseModel):
@@ -72,6 +82,10 @@ class JobCreate(BaseModel):
         None,
         description='Parametros adicionais de execucao (JSON)',
     )
+    priority: JobPriority = Field(
+        JobPriority.normal,
+        description='Prioridade do job (low, normal, high)',
+    )
     delivery_configs: list[DeliveryConfigInline] | None = Field(
         None,
         description='Configuracoes de entrega a serem criadas junto com o job',
@@ -113,6 +127,10 @@ class JobUpdate(BaseModel):
     agent_prompt: str | None = Field(None, min_length=1)
     prompt_template_id: uuid.UUID | None = Field(None)
     execution_params: dict | None = Field(None)
+    priority: JobPriority | None = Field(
+        None,
+        description='Prioridade do job (low, normal, high)',
+    )
     is_active: bool | None = Field(None)
 
     @field_validator('name')
@@ -186,6 +204,7 @@ class JobResponse(BaseModel):
     agent_prompt: str
     prompt_template_id: uuid.UUID | None = None
     execution_params: dict | None = None
+    priority: str = 'normal'
     is_active: bool
     next_execution: datetime | None = None
     delivery_configs: list[DeliveryConfigResponse] = []
@@ -208,6 +227,9 @@ class JobResponse(BaseModel):
                 if dc.deleted_at is None
             ]
 
+        # Acessa campo priority com seguranca (pode nao existir em migracoes pendentes)
+        priority: str = getattr(job, 'priority', 'normal') or 'normal'
+
         return cls(
             id=job.id,
             project_id=job.project_id,
@@ -217,6 +239,7 @@ class JobResponse(BaseModel):
             agent_prompt=job.agent_prompt,
             prompt_template_id=job.prompt_template_id,
             execution_params=job.execution_params,
+            priority=priority,
             is_active=job.is_active,
             next_execution=next_execution,
             delivery_configs=delivery_config_responses,

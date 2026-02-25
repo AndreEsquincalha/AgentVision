@@ -85,3 +85,37 @@ class RecentFailureResponse(BaseModel):
     project_name: str
     started_at: datetime
     error_summary: str
+
+
+class ProviderUsageResponse(BaseModel):
+    """Consumo de tokens por provider."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    provider: str
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+    total_images: int = 0
+    estimated_cost_usd: float = 0.0
+    call_count: int = 0
+
+
+class TokenUsageResponse(BaseModel):
+    """
+    Schema de resposta agregada de consumo de tokens.
+
+    Inclui total de tokens, custo estimado, consumo por provider
+    e media por execucao.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    total_tokens: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    total_images: int = 0
+    total_calls: int = 0
+    avg_tokens_per_call: float = 0.0
+    usage_by_provider: list[ProviderUsageResponse] = []

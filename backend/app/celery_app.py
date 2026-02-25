@@ -38,10 +38,18 @@ celery_app.conf.update(
     # quais jobs ativos devem ser disparados com base em seus crons.
     # Isso permite agendamento dinamico sem necessidade de RedBeat
     # ou DatabaseScheduler — basta ativar/desativar jobs no banco.
+    #
+    # A task cleanup_stale_executions roda a cada 5 minutos e recupera
+    # execucoes orfas (running ha mais de 30 min sem heartbeat),
+    # marcando-as como failed e liberando locks Redis.
     beat_schedule={
         'check-and-dispatch-jobs-every-minute': {
             'task': 'app.modules.jobs.tasks.check_and_dispatch_jobs',
             'schedule': 60.0,  # a cada 60 segundos
+        },
+        'cleanup-stale-executions-every-5-minutes': {
+            'task': 'app.modules.jobs.tasks.cleanup_stale_executions',
+            'schedule': 300.0,  # a cada 5 minutos (300 segundos)
         },
     },
 )

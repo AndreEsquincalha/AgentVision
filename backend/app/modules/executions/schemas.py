@@ -20,7 +20,7 @@ class ExecutionFilter(BaseModel):
     )
     status: str | None = Field(
         None,
-        description='Filtrar por status (pending, running, success, failed)',
+        description='Filtrar por status (pending, running, success, failed, cancelled)',
     )
     date_from: datetime | None = Field(
         None,
@@ -50,6 +50,7 @@ class ExecutionResponse(BaseModel):
     job_name: str | None = None
     project_name: str | None = None
     status: str
+    celery_task_id: str | None = None
     logs: str | None = None
     extracted_data: dict | None = None
     screenshots_path: str | None = None
@@ -58,6 +59,7 @@ class ExecutionResponse(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_seconds: int | None = None
+    last_heartbeat: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -76,12 +78,17 @@ class ExecutionResponse(BaseModel):
             if hasattr(execution.job, 'project') and execution.job.project:
                 project_name = execution.job.project.name
 
+        # Acessa campos novos com seguranca (podem nao existir em migracoes pendentes)
+        celery_task_id: str | None = getattr(execution, 'celery_task_id', None)
+        last_heartbeat: datetime | None = getattr(execution, 'last_heartbeat', None)
+
         return cls(
             id=execution.id,
             job_id=execution.job_id,
             job_name=job_name,
             project_name=project_name,
             status=execution.status,
+            celery_task_id=celery_task_id,
             logs=execution.logs,
             extracted_data=execution.extracted_data,
             screenshots_path=execution.screenshots_path,
@@ -90,6 +97,7 @@ class ExecutionResponse(BaseModel):
             started_at=execution.started_at,
             finished_at=execution.finished_at,
             duration_seconds=execution.duration_seconds,
+            last_heartbeat=last_heartbeat,
             created_at=execution.created_at,
             updated_at=execution.updated_at,
         )
@@ -159,6 +167,7 @@ class ExecutionDetailResponse(BaseModel):
     job_name: str | None = None
     project_name: str | None = None
     status: str
+    celery_task_id: str | None = None
     logs: str | None = None
     extracted_data: dict | None = None
     screenshots_path: str | None = None
@@ -167,6 +176,7 @@ class ExecutionDetailResponse(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_seconds: int | None = None
+    last_heartbeat: datetime | None = None
     delivery_logs: list[DeliveryLogResponse] = []
     created_at: datetime
     updated_at: datetime
@@ -194,12 +204,17 @@ class ExecutionDetailResponse(BaseModel):
                 for dl in execution.delivery_logs
             ]
 
+        # Acessa campos novos com seguranca (podem nao existir em migracoes pendentes)
+        celery_task_id: str | None = getattr(execution, 'celery_task_id', None)
+        last_heartbeat: datetime | None = getattr(execution, 'last_heartbeat', None)
+
         return cls(
             id=execution.id,
             job_id=execution.job_id,
             job_name=job_name,
             project_name=project_name,
             status=execution.status,
+            celery_task_id=celery_task_id,
             logs=execution.logs,
             extracted_data=execution.extracted_data,
             screenshots_path=execution.screenshots_path,
@@ -208,6 +223,7 @@ class ExecutionDetailResponse(BaseModel):
             started_at=execution.started_at,
             finished_at=execution.finished_at,
             duration_seconds=execution.duration_seconds,
+            last_heartbeat=last_heartbeat,
             delivery_logs=delivery_log_responses,
             created_at=execution.created_at,
             updated_at=execution.updated_at,

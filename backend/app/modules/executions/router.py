@@ -15,6 +15,7 @@ from app.modules.executions.schemas import (
     ExecutionDetailResponse,
     ExecutionFilter,
     ExecutionListResponse,
+    ExecutionResponse,
     PdfUrlResponse,
     ScreenshotUrlResponse,
 )
@@ -97,6 +98,22 @@ def list_executions(
         per_page=per_page,
         filters=filters,
     )
+
+
+@router.post('/{execution_id}/cancel', response_model=ExecutionResponse)
+def cancel_execution(
+    execution_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    service: ExecutionService = Depends(get_execution_service),
+) -> ExecutionResponse:
+    """
+    Cancela uma execucao em andamento.
+
+    Revoga a task Celery associada, atualiza o status para 'cancelled'
+    e registra log de cancelamento. Apenas execucoes com status 'running'
+    podem ser canceladas.
+    """
+    return service.cancel_execution(execution_id)
 
 
 @router.get('/{execution_id}', response_model=ExecutionDetailResponse)

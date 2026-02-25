@@ -9,6 +9,7 @@ from app.modules.executions.schemas import (
     ExecutionFilter,
     ExecutionListItemResponse,
     ExecutionListResponse,
+    ExecutionResponse,
     PdfUrlResponse,
     ScreenshotUrlResponse,
 )
@@ -17,6 +18,9 @@ from app.shared.schemas import PaginatedResponse
 from app.shared.storage import StorageClient
 
 logger = logging.getLogger(__name__)
+
+# Valor padrao para limite de execucoes simultaneas
+DEFAULT_MAX_CONCURRENT_JOBS: int = 3
 
 
 class ExecutionService:
@@ -314,3 +318,134 @@ class ExecutionService:
 
         # Delega ao servico de entregas
         return self._delivery_service.retry_delivery(delivery_log_id)
+
+    def cancel_execution(self, execution_id: uuid.UUID) -> ExecutionResponse:
+        """
+        Cancela uma execucao em andamento.
+
+        Revoga a task Celery associada, atualiza o status para 'cancelled'
+        e adiciona log de cancelamento.
+
+        Args:
+            execution_id: ID da execucao a ser cancelada.
+
+        Returns:
+            Dados atualizados da execucao cancelada.
+
+        Raises:
+            NotFoundException: Se a execucao nao for encontrada.
+            BadRequestException: Se a execucao nao esta em andamento.
+        """
+        from app.celery_app import celery_app
+        from app.shared.utils import utc_now
+
+        execution = self._repository.get_by_id(execution_id)
+        if not execution:
+            raise NotFoundException('Execucao nao encontrada')
+
+        # Apenas execucoes em andamento podem ser canceladas
+        if execution.status != 'running':
+            raise BadRequestException(
+                'Apenas execucoes em andamento podem ser canceladas'
+            )
+
+        # Revoga a task Celery se houver celery_task_id
+        celery_task_id: str | None = getattr(execution, 'celery_task_id', None)
+        if celery_task_id:
+            try:
+                celery_app.control.revoke(
+                    celery_task_id,
+                    terminate=True,
+                    signal='SIGTERM',
+                )
+                logger.info(
+                    'Task Celery %s revogada para execucao %s',
+                    celery_task_id,
+                    execution_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    'Erro ao revogar task Celery %s para execucao %s: %s',
+                    celery_task_id,
+                    execution_id,
+                    str(e),
+                )
+        else:
+            logger.warning(
+                'Execucao %s nao possui celery_task_id para revogar',
+                execution_id,
+            )
+
+        # Monta log de cancelamento
+        now = utc_now()
+        cancel_log = f'Execucao cancelada pelo usuario em {now.isoformat()}'
+        existing_logs = execution.logs or ''
+        updated_logs = (
+            f'{existing_logs}\n{cancel_log}' if existing_logs else cancel_log
+        )
+
+        # Calcula duracao se a execucao tinha started_at
+        duration_seconds: int | None = None
+        if execution.started_at:
+            duration_seconds = int((now - execution.started_at).total_seconds())
+
+        # Atualiza a execucao no banco
+        updated_execution = self._repository.update_status(
+            execution_id=execution_id,
+            status='cancelled',
+            logs=updated_logs,
+            finished_at=now,
+            duration_seconds=duration_seconds,
+        )
+
+        if not updated_execution:
+            raise NotFoundException('Execucao nao encontrada ao atualizar')
+
+        logger.info('Execucao %s cancelada com sucesso', execution_id)
+
+        return ExecutionResponse.from_model(updated_execution)
+
+    def get_max_concurrent_jobs(self) -> int:
+        """
+        Obtem o limite de execucoes simultaneas a partir da tabela settings.
+
+        Busca a chave 'execution.max_concurrent_jobs' na categoria 'execution'.
+        Se nao encontrada ou invalida, retorna o valor padrao (3).
+
+        Returns:
+            Limite maximo de execucoes simultaneas.
+        """
+        from app.modules.settings.repository import SettingRepository
+        from app.shared.utils import decrypt_value
+
+        try:
+            # Obtem a sessao do banco a partir do repositorio existente
+            db = self._repository._db
+            setting_repo = SettingRepository(db)
+            setting = setting_repo.get_by_key('execution.max_concurrent_jobs')
+
+            if setting and setting.encrypted_value:
+                decrypted = decrypt_value(setting.encrypted_value)
+                value = int(decrypted)
+                if value < 1:
+                    logger.warning(
+                        'Valor de max_concurrent_jobs invalido (%d), usando padrao %d',
+                        value,
+                        DEFAULT_MAX_CONCURRENT_JOBS,
+                    )
+                    return DEFAULT_MAX_CONCURRENT_JOBS
+                return value
+        except (ValueError, TypeError) as e:
+            logger.warning(
+                'Erro ao ler max_concurrent_jobs do settings: %s. Usando padrao %d',
+                str(e),
+                DEFAULT_MAX_CONCURRENT_JOBS,
+            )
+        except Exception as e:
+            logger.warning(
+                'Erro inesperado ao ler max_concurrent_jobs: %s. Usando padrao %d',
+                str(e),
+                DEFAULT_MAX_CONCURRENT_JOBS,
+            )
+
+        return DEFAULT_MAX_CONCURRENT_JOBS

@@ -1,6 +1,8 @@
 import base64
+import io
 import json
 import logging
+import math
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -17,6 +19,8 @@ class AnalysisResult:
     text: str
     extracted_data: dict | None = field(default=None)
     tokens_used: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class BaseLLMProvider(ABC):
@@ -50,6 +54,16 @@ class BaseLLMProvider(ABC):
         self._temperature = temperature
         self._max_tokens = max_tokens
         self._timeout = timeout
+
+    @property
+    def provider_name(self) -> str:
+        """Retorna o nome do provider para tracking/logging."""
+        return self.__class__.__name__.replace('Provider', '').lower()
+
+    @property
+    def model_name(self) -> str:
+        """Retorna o nome do modelo configurado."""
+        return self._model
 
     @abstractmethod
     def analyze_image(self, image_data: bytes, prompt: str) -> AnalysisResult:
@@ -121,6 +135,70 @@ class BaseLLMProvider(ABC):
         """Codifica imagem em base64."""
         return base64.b64encode(image_data).decode('utf-8')
 
+    def estimate_tokens(self, text: str, images: list[bytes]) -> dict[str, int]:
+        """
+        Estima o numero de tokens que serao consumidos pela chamada.
+
+        Args:
+            text: Texto do prompt completo.
+            images: Lista de imagens em bytes.
+
+        Returns:
+            Dicionario com text_tokens, image_tokens, total e context_limit.
+        """
+        # Texto: ~4 chars = 1 token (PT-BR tem mais acentos)
+        text_tokens = len(text) // 4
+
+        # Imagens: varia por provider (subclasse pode sobrescrever)
+        image_tokens = self._estimate_image_tokens(images)
+
+        total = text_tokens + image_tokens
+        return {
+            'text_tokens': text_tokens,
+            'image_tokens': image_tokens,
+            'total': total,
+            'context_limit': self._get_context_limit(),
+        }
+
+    def _estimate_image_tokens(self, images: list[bytes]) -> int:
+        """
+        Estimativa base de tokens por imagem. Override por provider.
+
+        Args:
+            images: Lista de imagens em bytes.
+
+        Returns:
+            Estimativa total de tokens de imagem.
+        """
+        return len(images) * 1000  # Estimativa conservadora padrao
+
+    def _get_context_limit(self) -> int:
+        """
+        Retorna o limite de contexto do modelo. Override por provider.
+
+        Returns:
+            Limite de tokens de contexto.
+        """
+        return 128000  # Default seguro
+
+    @staticmethod
+    def _get_image_dimensions(image_data: bytes) -> tuple[int, int]:
+        """
+        Obtem dimensoes de uma imagem sem carrega-la completamente.
+
+        Args:
+            image_data: Bytes da imagem.
+
+        Returns:
+            Tupla (largura, altura). Retorna (1024, 768) como fallback.
+        """
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(image_data))
+            return img.size
+        except Exception:
+            return (1024, 768)
+
     @staticmethod
     def _detect_media_type(image_data: bytes) -> str:
         """
@@ -178,6 +256,18 @@ class AnthropicProvider(BaseLLMProvider):
                 'Instale com: pip install anthropic'
             )
 
+    def _estimate_image_tokens(self, images: list[bytes]) -> int:
+        """Anthropic: largura * altura / 750 tokens por imagem."""
+        total = 0
+        for img_bytes in images:
+            w, h = self._get_image_dimensions(img_bytes)
+            total += int(w * h / 750)
+        return total
+
+    def _get_context_limit(self) -> int:
+        """Claude Sonnet/Opus suportam 200k de contexto."""
+        return 200000
+
     def analyze_image(self, image_data: bytes, prompt: str) -> AnalysisResult:
         """Analisa uma unica imagem usando Claude Vision."""
         return self.analyze_images([image_data], prompt)
@@ -226,26 +316,28 @@ class AnthropicProvider(BaseLLMProvider):
                 if hasattr(block, 'text'):
                     response_text += block.text
 
-            # Calcula tokens usados
-            tokens_used = 0
+            # Calcula tokens usados (detalhado por input/output)
+            input_tokens = 0
+            output_tokens = 0
             if hasattr(response, 'usage'):
-                tokens_used = (
-                    getattr(response.usage, 'input_tokens', 0)
-                    + getattr(response.usage, 'output_tokens', 0)
-                )
+                input_tokens = getattr(response.usage, 'input_tokens', 0)
+                output_tokens = getattr(response.usage, 'output_tokens', 0)
+            tokens_used = input_tokens + output_tokens
 
             # Tenta extrair JSON da resposta
             extracted_data = self._extract_json_from_text(response_text)
 
             logger.info(
-                'AnthropicProvider: analise concluida. Tokens usados: %d',
-                tokens_used,
+                'AnthropicProvider: analise concluida. Tokens usados: %d (in=%d, out=%d)',
+                tokens_used, input_tokens, output_tokens,
             )
 
             return AnalysisResult(
                 text=response_text,
                 extracted_data=extracted_data,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
         except Exception as e:
@@ -288,6 +380,21 @@ class OpenAIProvider(BaseLLMProvider):
                 'O pacote "openai" e necessario para usar o OpenAIProvider. '
                 'Instale com: pip install openai'
             )
+
+    def _estimate_image_tokens(self, images: list[bytes]) -> int:
+        """OpenAI: tiles de 512x512, cada tile ~170 tokens."""
+        total = 0
+        for img_bytes in images:
+            w, h = self._get_image_dimensions(img_bytes)
+            # Calcula numero de tiles 512x512 necessarios
+            tiles_x = math.ceil(w / 512)
+            tiles_y = math.ceil(h / 512)
+            total += tiles_x * tiles_y * 170 + 85  # +85 base overhead
+        return total
+
+    def _get_context_limit(self) -> int:
+        """GPT-4o suporta 128k de contexto."""
+        return 128000
 
     def analyze_image(self, image_data: bytes, prompt: str) -> AnalysisResult:
         """Analisa uma unica imagem usando GPT-4o Vision."""
@@ -336,26 +443,28 @@ class OpenAIProvider(BaseLLMProvider):
             if response.choices and response.choices[0].message.content:
                 response_text = response.choices[0].message.content
 
-            # Calcula tokens usados
-            tokens_used = 0
+            # Calcula tokens usados (detalhado por input/output)
+            input_tokens = 0
+            output_tokens = 0
             if response.usage:
-                tokens_used = (
-                    getattr(response.usage, 'prompt_tokens', 0)
-                    + getattr(response.usage, 'completion_tokens', 0)
-                )
+                input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                output_tokens = getattr(response.usage, 'completion_tokens', 0)
+            tokens_used = input_tokens + output_tokens
 
             # Tenta extrair JSON da resposta
             extracted_data = self._extract_json_from_text(response_text)
 
             logger.info(
-                'OpenAIProvider: analise concluida. Tokens usados: %d',
-                tokens_used,
+                'OpenAIProvider: analise concluida. Tokens usados: %d (in=%d, out=%d)',
+                tokens_used, input_tokens, output_tokens,
             )
 
             return AnalysisResult(
                 text=response_text,
                 extracted_data=extracted_data,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
         except Exception as e:
@@ -401,6 +510,14 @@ class GoogleProvider(BaseLLMProvider):
                 'Instale com: pip install google-generativeai'
             )
 
+    def _estimate_image_tokens(self, images: list[bytes]) -> int:
+        """Gemini: ~258 tokens por imagem."""
+        return len(images) * 258
+
+    def _get_context_limit(self) -> int:
+        """Gemini 2.0 Flash suporta 1M+ de contexto, usamos 1M como limite."""
+        return 1000000
+
     def analyze_image(self, image_data: bytes, prompt: str) -> AnalysisResult:
         """Analisa uma unica imagem usando Gemini Vision."""
         return self.analyze_images([image_data], prompt)
@@ -434,26 +551,32 @@ class GoogleProvider(BaseLLMProvider):
             if response and response.text:
                 response_text = response.text
 
-            # Calcula tokens usados
-            tokens_used = 0
+            # Calcula tokens usados (detalhado por input/output)
+            input_tokens = 0
+            output_tokens = 0
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                tokens_used = (
-                    getattr(response.usage_metadata, 'prompt_token_count', 0)
-                    + getattr(response.usage_metadata, 'candidates_token_count', 0)
+                input_tokens = getattr(
+                    response.usage_metadata, 'prompt_token_count', 0,
                 )
+                output_tokens = getattr(
+                    response.usage_metadata, 'candidates_token_count', 0,
+                )
+            tokens_used = input_tokens + output_tokens
 
             # Tenta extrair JSON da resposta
             extracted_data = self._extract_json_from_text(response_text)
 
             logger.info(
-                'GoogleProvider: analise concluida. Tokens usados: %d',
-                tokens_used,
+                'GoogleProvider: analise concluida. Tokens usados: %d (in=%d, out=%d)',
+                tokens_used, input_tokens, output_tokens,
             )
 
             return AnalysisResult(
                 text=response_text,
                 extracted_data=extracted_data,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
         except Exception as e:
@@ -488,6 +611,14 @@ class OllamaProvider(BaseLLMProvider):
             self._base_url = api_key.rstrip('/')
         else:
             self._base_url = 'http://localhost:11434'
+
+    def _estimate_image_tokens(self, images: list[bytes]) -> int:
+        """Ollama: ~500 tokens por imagem (estimativa para modelos locais)."""
+        return len(images) * 500
+
+    def _get_context_limit(self) -> int:
+        """Modelos locais geralmente tem contexto menor (8k-32k)."""
+        return 32000
 
     def analyze_image(self, image_data: bytes, prompt: str) -> AnalysisResult:
         """Analisa uma unica imagem usando Ollama local."""
@@ -538,24 +669,24 @@ class OllamaProvider(BaseLLMProvider):
                 response_text = data['message']['content']
 
             # Calcula tokens usados (Ollama retorna em campos diferentes)
-            tokens_used = 0
-            if 'prompt_eval_count' in data:
-                tokens_used += data['prompt_eval_count']
-            if 'eval_count' in data:
-                tokens_used += data['eval_count']
+            input_tokens = data.get('prompt_eval_count', 0)
+            output_tokens = data.get('eval_count', 0)
+            tokens_used = input_tokens + output_tokens
 
             # Tenta extrair JSON da resposta
             extracted_data = self._extract_json_from_text(response_text)
 
             logger.info(
-                'OllamaProvider: analise concluida. Tokens usados: %d',
-                tokens_used,
+                'OllamaProvider: analise concluida. Tokens usados: %d (in=%d, out=%d)',
+                tokens_used, input_tokens, output_tokens,
             )
 
             return AnalysisResult(
                 text=response_text,
                 extracted_data=extracted_data,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
         except httpx.ConnectError:

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from croniter import croniter
 from sqlalchemy.orm import Session
@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from app.modules.dashboard.schemas import (
     DashboardSummaryResponse,
     ExecutionStatusCounts,
+    ProviderUsageResponse,
     RecentExecutionResponse,
     RecentFailureResponse,
+    TokenUsageResponse,
     UpcomingExecutionResponse,
 )
 from app.modules.executions.repository import ExecutionRepository
@@ -228,3 +230,77 @@ class DashboardService:
             )
 
         return results
+
+    def get_token_usage(
+        self,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        provider: str | None = None,
+    ) -> TokenUsageResponse:
+        """
+        Retorna consumo agregado de tokens LLM por provider e periodo.
+
+        Args:
+            date_from: Inicio do periodo (inclusive). Default: 30 dias atras.
+            date_to: Fim do periodo (inclusive). Default: agora.
+            provider: Filtro por provider (opcional).
+
+        Returns:
+            TokenUsageResponse com totais e desdobramento por provider.
+        """
+        from app.modules.agents.token_tracker import TokenTracker
+
+        now = utc_now()
+        if date_from is None:
+            date_from = now - timedelta(days=30)
+        if date_to is None:
+            date_to = now
+
+        usage_data = TokenTracker.get_usage_for_period(
+            date_from=date_from,
+            date_to=date_to,
+            provider=provider,
+        )
+
+        # Agrega totais
+        total_tokens = 0
+        total_input = 0
+        total_output = 0
+        total_cost = 0.0
+        total_images = 0
+        total_calls = 0
+
+        by_provider: list[ProviderUsageResponse] = []
+
+        for row in usage_data:
+            total_tokens += row['total_tokens']
+            total_input += row['total_input_tokens']
+            total_output += row['total_output_tokens']
+            total_cost += row['estimated_cost_usd']
+            total_images += row['total_images']
+            total_calls += row['call_count']
+
+            by_provider.append(ProviderUsageResponse(
+                provider=row['provider'],
+                total_input_tokens=row['total_input_tokens'],
+                total_output_tokens=row['total_output_tokens'],
+                total_tokens=row['total_tokens'],
+                total_images=row['total_images'],
+                estimated_cost_usd=round(row['estimated_cost_usd'], 6),
+                call_count=row['call_count'],
+            ))
+
+        avg_per_call = (
+            (total_tokens / total_calls) if total_calls > 0 else 0.0
+        )
+
+        return TokenUsageResponse(
+            total_tokens=total_tokens,
+            total_input_tokens=total_input,
+            total_output_tokens=total_output,
+            estimated_cost_usd=round(total_cost, 6),
+            total_images=total_images,
+            total_calls=total_calls,
+            avg_tokens_per_call=round(avg_per_call, 1),
+            usage_by_provider=by_provider,
+        )

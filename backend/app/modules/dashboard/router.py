@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +10,7 @@ from app.modules.dashboard.schemas import (
     DashboardSummaryResponse,
     RecentExecutionResponse,
     RecentFailureResponse,
+    TokenUsageResponse,
     UpcomingExecutionResponse,
 )
 from app.modules.dashboard.service import DashboardService
@@ -91,3 +94,35 @@ def get_recent_failures(
     Requer autenticacao via access token.
     """
     return service.get_recent_failures()
+
+
+@router.get('/token-usage', response_model=TokenUsageResponse)
+def get_token_usage(
+    date_from: datetime | None = Query(
+        default=None,
+        description='Inicio do periodo (ISO 8601). Default: 30 dias atras.',
+    ),
+    date_to: datetime | None = Query(
+        default=None,
+        description='Fim do periodo (ISO 8601). Default: agora.',
+    ),
+    provider: str | None = Query(
+        default=None,
+        description='Filtrar por provider (anthropic, openai, google, ollama).',
+    ),
+    current_user: User = Depends(get_current_user),
+    service: DashboardService = Depends(get_dashboard_service),
+) -> TokenUsageResponse:
+    """
+    Retorna consumo agregado de tokens LLM.
+
+    Permite filtrar por periodo e provider. Retorna total de tokens,
+    custo estimado, consumo por provider e media por chamada.
+
+    Requer autenticacao via access token.
+    """
+    return service.get_token_usage(
+        date_from=date_from,
+        date_to=date_to,
+        provider=provider,
+    )

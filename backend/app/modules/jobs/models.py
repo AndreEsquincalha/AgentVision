@@ -58,6 +58,13 @@ class Job(SoftDeleteModel):
         default=None,
     )
 
+    # --- Prioridade ---
+    priority: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default='normal',
+    )
+
     # --- Status ---
     is_active: Mapped[bool] = mapped_column(
         Boolean,

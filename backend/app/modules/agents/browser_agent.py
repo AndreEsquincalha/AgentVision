@@ -197,20 +197,33 @@ class BrowserAgent:
                     extracted_content.append(final_str)
                     logs.append(f'Resultado final: {final_str[:200]}')
 
-            # Deduplica screenshots (remove prints identicos)
+            # Deduplica screenshots usando perceptual hashing (pHash)
             if len(screenshots) > 1:
-                unique_screenshots: list[bytes] = []
-                seen_hashes: set[int] = set()
-                for img in screenshots:
-                    img_hash = hash(img)
-                    if img_hash not in seen_hashes:
-                        seen_hashes.add(img_hash)
-                        unique_screenshots.append(img)
-                if len(unique_screenshots) < len(screenshots):
+                from app.modules.agents.screenshot_classifier import ScreenshotClassifier
+
+                classifier = ScreenshotClassifier()
+                classified = classifier.deduplicate(screenshots)
+                original_count = len(screenshots)
+                screenshots = [c.image_bytes for c in classified]
+                if len(screenshots) < original_count:
                     logs.append(
-                        f'Screenshots deduplicados: {len(screenshots)} -> {len(unique_screenshots)}'
+                        f'Screenshots deduplicados via pHash: {original_count} -> {len(screenshots)}'
                     )
-                    screenshots = unique_screenshots
+
+            # Limita numero maximo de screenshots usando classificacao por relevancia
+            max_screenshots = execution_params.get('max_screenshots', 10)
+            if len(screenshots) > max_screenshots:
+                from app.modules.agents.screenshot_classifier import ScreenshotClassifier
+
+                classifier = ScreenshotClassifier()
+                original_count = len(screenshots)
+                classified = classifier.classify_and_select(
+                    screenshots, max_screenshots=max_screenshots, logs=logs,
+                )
+                screenshots = [c.image_bytes for c in classified]
+                logs.append(
+                    f'Screenshots limitados por relevancia: selecionados {len(screenshots)} de {original_count}'
+                )
 
             # Extrai erros
             errors = history.errors()
@@ -663,21 +676,33 @@ class BrowserAgent:
         # Prompt principal
         parts.append(f'Instrucoes: {prompt}')
 
-        # Instrucao para capturar screenshots e extrair conteudo
+        # Instrucao para extrair conteudo durante a navegacao
         parts.append(
-            'Capture screenshots nos momentos relevantes (apos carregar paginas, '
-            'apos interacoes importantes, e quando encontrar informacoes relevantes). '
             'Enquanto navega, use a acao "extract" para extrair e registrar sua analise '
             'do que voce esta vendo: descreva o conteudo visual, informacoes encontradas, '
             'observacoes importantes e insights. Essa analise sera usada no relatorio final.'
         )
 
-        # Instrucao de finalizacao — evita que o agente fique em loop apos completar a tarefa
+        # Regras de captura de screenshots — momentos-chave apenas
+        max_screenshots = execution_params.get('max_screenshots', 10)
         parts.append(
-            'IMPORTANTE: Quando voce tiver concluido todas as instrucoes acima e '
-            'capturado os screenshots necessarios, pare imediatamente. '
-            'Nao continue navegando, nao explore outras secoes do site, '
-            'nao repita acoes ja concluidas. Sinalize que a tarefa foi concluida com done.'
+            f'REGRAS DE SCREENSHOTS: '
+            f'NAO capture screenshots a cada passo ou acao intermediaria. '
+            f'Capture APENAS nos seguintes momentos: '
+            f'1. Apos a pagina principal carregar completamente. '
+            f'2. Apos realizar login (se aplicavel). '
+            f'3. Quando encontrar os dados ou informacoes solicitados. '
+            f'4. No estado final apos completar todas as instrucoes. '
+            f'Maximo de {max_screenshots} screenshots durante toda a execucao.'
+        )
+
+        # Instrucao de finalizacao assertiva — evita loops e navegacao desnecessaria
+        parts.append(
+            'FINALIZACAO OBRIGATORIA: '
+            'Ao concluir TODAS as instrucoes acima, sinalize imediatamente que a tarefa esta concluida. '
+            'NAO explore secoes adicionais do site. NAO repita acoes. '
+            'NAO navegue para URLs nao solicitadas. '
+            'Se uma acao falhar apos 2 tentativas, prossiga para a proxima instrucao.'
         )
 
         return ' '.join(parts)

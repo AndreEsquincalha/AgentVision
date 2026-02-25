@@ -251,7 +251,7 @@ class ExecutionRepository:
 
         Returns:
             Dicionario com contagens por status
-            (pending, running, success, failed).
+            (pending, running, success, failed, cancelled).
         """
         stmt = select(
             Execution.status,
@@ -273,6 +273,7 @@ class ExecutionRepository:
             'running': 0,
             'success': 0,
             'failed': 0,
+            'cancelled': 0,
         }
 
         for status_value, count in results:

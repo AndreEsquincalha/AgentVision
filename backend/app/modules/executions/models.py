@@ -71,6 +71,21 @@ class Execution(BaseModel):
         nullable=False,
     )
 
+    # --- Rastreamento Celery ---
+    celery_task_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        default=None,
+        index=True,
+    )
+
+    # --- Heartbeat (prova de vida da execucao) ---
+    last_heartbeat: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
     # --- Timestamps de execucao ---
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

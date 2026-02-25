@@ -12,61 +12,61 @@
 
 ### 8.1 Distributed Lock para Prevenção de Execuções Duplicadas
 
-- [ ] **8.1.1** Implementar distributed lock com Redis para `execute_job`
+- [X] **8.1.1** Implementar distributed lock com Redis para `execute_job`
   - Usar Redis `SET key NX EX ttl` (lock atômico com expiração)
   - Chave de lock: `job_lock:{job_id}` — impede 2 execuções do mesmo job ao mesmo tempo
   - TTL do lock = timeout máximo do job + margem de segurança (ex: `max_steps * timeout_per_step + 120s`)
   - Liberar lock no `finally` da task (com verificação de ownership via token UUID)
   - Logar quando lock não é adquirido: `"Job {job_id} já está em execução, pulando"`
 
-- [ ] **8.1.2** Adicionar verificação de execução ativa antes de despachar no `check_and_dispatch_jobs`
+- [X] **8.1.2** Adicionar verificação de execução ativa antes de despachar no `check_and_dispatch_jobs`
   - Antes de chamar `execute_job.delay()`, consultar se existe `Execution` com `status='running'` para o mesmo `job_id`
   - Se existir execução running com mais de `N` minutos (threshold configurável), considerar como órfã
   - Logar e pular despacho se já há execução ativa
 
-- [ ] **8.1.3** Criar campo `celery_task_id` no model `Execution`
+- [X] **8.1.3** Criar campo `celery_task_id` no model `Execution`
   - Migração Alembic: adicionar coluna `celery_task_id` (String, nullable, indexed)
   - Gravar `self.request.id` do Celery ao criar a Execution
   - Permitir correlação entre task Celery e Execution no banco
 
-- [ ] **8.1.4** Criar endpoint `POST /api/executions/{id}/cancel` para cancelamento
+- [X] **8.1.4** Criar endpoint `POST /api/executions/{id}/cancel` para cancelamento
   - Revogar task Celery via `celery_app.control.revoke(task_id, terminate=True)`
   - Atualizar status da Execution para `cancelled`
   - Adicionar status `cancelled` ao enum de status (model + schema + frontend)
 
 ### 8.2 Recuperação de Execuções Órfãs (Stale Execution Recovery)
 
-- [ ] **8.2.1** Criar task periódica `cleanup_stale_executions`
+- [X] **8.2.1** Criar task periódica `cleanup_stale_executions`
   - Rodar a cada 5 minutos via Celery Beat
   - Buscar execuções com `status='running'` e `started_at` há mais de `MAX_EXECUTION_DURATION` (ex: 30 min)
   - Atualizar para `status='failed'` com mensagem: `"Execução abandonada — timeout global excedido"`
   - Liberar lock Redis correspondente se existir
   - Registrar no log: `"Execution {id} marcada como failed (stale recovery)"`
 
-- [ ] **8.2.2** Adicionar campo `last_heartbeat` no model `Execution`
+- [X] **8.2.2** Adicionar campo `last_heartbeat` no model `Execution`
   - Migração Alembic: adicionar coluna `last_heartbeat` (DateTime, nullable)
   - Atualizar heartbeat periodicamente durante a execução (a cada 30s)
   - Task de cleanup usa `last_heartbeat` em vez de `started_at` para identificar execuções realmente travadas
 
-- [ ] **8.2.3** Implementar heartbeat na task `execute_job`
+- [X] **8.2.3** Implementar heartbeat na task `execute_job`
   - Criar thread daemon que atualiza `last_heartbeat` no banco a cada 30s
   - Parar thread no finally da task
   - Heartbeat serve como prova de vida — se parar de atualizar, a execução é considerada morta
 
 ### 8.3 Controle de Concorrência Global
 
-- [ ] **8.3.1** Implementar limite global de execuções simultâneas
+- [X] **8.3.1** Implementar limite global de execuções simultâneas
   - Usar semáforo Redis: `execution_semaphore` com `max_concurrent_jobs` (configurável em Settings)
   - Antes de executar, fazer `acquire()` no semáforo; no `finally`, fazer `release()`
   - Se semáforo cheio, reenfileirar a task com countdown (retry após N segundos)
   - Default: `max_concurrent_jobs = 3`
 
-- [ ] **8.3.2** Adicionar configuração `max_concurrent_jobs` no módulo Settings
+- [X] **8.3.2** Adicionar configuração `max_concurrent_jobs` no módulo Settings
   - Nova chave no Settings: `execution.max_concurrent_jobs` (categoria `execution`)
   - Endpoint para consultar e alterar
   - Frontend: campo em Settings para configurar
 
-- [ ] **8.3.3** Implementar fila de prioridade para jobs
+- [X] **8.3.3** Implementar fila de prioridade para jobs
   - Jobs marcados como `high_priority` entram em fila prioritária
   - Adicionar campo `priority` no model Job (default='normal', enum: 'low', 'normal', 'high')
   - Migração Alembic para nova coluna
@@ -81,7 +81,7 @@
 
 ### 9.1 Screenshot Intelligence — Captura Seletiva e Inteligente
 
-- [ ] **9.1.1** Implementar classificação de screenshots por relevância
+- [X] **9.1.1** Implementar classificação de screenshots por relevância
   - Criar classe `ScreenshotClassifier` em `agents/screenshot_classifier.py`
   - Critérios de relevância:
     - **Diferença visual**: comparar perceptual hash (pHash) entre screenshots consecutivos
@@ -89,7 +89,7 @@
     - **Conteúdo detectado**: se contém tabelas, formulários, dados — é relevante
   - Retornar lista ordenada por relevância com score 0.0-1.0
 
-- [ ] **9.1.2** Substituir deduplicação por hash por perceptual hashing (pHash)
+- [X] **9.1.2** Substituir deduplicação por hash por perceptual hashing (pHash)
   - Remover `hash(img)` (não-determinístico, ineficaz) de `browser_agent.py:201-213`
   - Implementar pHash usando `imagehash` ou `Pillow` diretamente:
     ```python
@@ -103,7 +103,7 @@
   - Dois screenshots com distância de Hamming < threshold são considerados duplicados
   - Manter apenas o de melhor resolução entre duplicados
 
-- [ ] **9.1.3** Implementar estratégia de captura "momentos-chave" no BrowserAgent
+- [X] **9.1.3** Implementar estratégia de captura "momentos-chave" no BrowserAgent
   - Definir eventos de captura obrigatórios: `page_loaded`, `after_login`, `after_action`, `final_state`
   - Definir eventos opcionais: `error_detected`, `data_found`, `navigation_change`
   - Instruir o browser-use agent via prompt a **não** capturar screenshots de cada passo
@@ -116,14 +116,14 @@
     4. No estado final após completar a tarefa
     ```
 
-- [ ] **9.1.4** Limitar número máximo de screenshots por execução
+- [X] **9.1.4** Limitar número máximo de screenshots por execução
   - Adicionar campo `max_screenshots` no Job `execution_params` (default: 10)
   - Se browser-use gerar mais que `max_screenshots`, selecionar os mais relevantes via `ScreenshotClassifier`
   - Log: `"Screenshots limitados: {original} -> {max_screenshots} (selecionados por relevância)"`
 
 ### 9.2 Otimização de Prompts para Economia de Tokens
 
-- [ ] **9.2.1** Reduzir e otimizar o `_SYSTEM_PROMPT_TEMPLATE` do VisionAnalyzer
+- [X] **9.2.1** Reduzir e otimizar o `_SYSTEM_PROMPT_TEMPLATE` do VisionAnalyzer
   - Prompt atual é verboso (~500 tokens só de template)
   - Criar versão compacta sem perder instruções:
     - Remover redundâncias e exemplos desnecessários
@@ -131,7 +131,7 @@
     - Reduzir template JSON — usar formato mínimo com campos obrigatórios
   - Objetivo: reduzir template de ~500 para ~200 tokens (60% economia)
 
-- [ ] **9.2.2** Implementar image resizing antes de enviar ao LLM
+- [X] **9.2.2** Implementar image resizing antes de enviar ao LLM
   - Redimensionar screenshots para resolução ótima por provider:
     - Anthropic Claude: 1568px no lado maior (limite de ~1.15M pixels)
     - OpenAI GPT-4o: 2048px ou 768px (modo `low`/`high` detail)
@@ -140,13 +140,13 @@
   - Manter PNG apenas se detectar texto fino ou elementos UI críticos
   - Calcular economia: screenshot original ~500KB → comprimido ~80KB = ~84% menos tokens de imagem
 
-- [ ] **9.2.3** Implementar seleção inteligente de screenshots para análise
+- [X] **9.2.3** Implementar seleção inteligente de screenshots para análise
   - Substituir seleção fixa "primeiro, meio, último" por seleção por relevância
   - Usar scores do `ScreenshotClassifier` para enviar apenas os mais informativos
   - Se análise anterior (browser-use extracted_content) já tem dados suficientes, reduzir para 1 screenshot
   - Heurística: se extracted_content >= 500 chars, enviar apenas screenshot final
 
-- [ ] **9.2.4** Implementar contagem estimada de tokens antes de enviar ao LLM
+- [X] **9.2.4** Implementar contagem estimada de tokens antes de enviar ao LLM
   - Criar método `estimate_tokens()` em cada provider:
     - Texto: ~4 chars = 1 token (PT-BR), ~3.5 chars = 1 token (EN)
     - Imagens Anthropic: largura * altura / 750 tokens (aproximação)
@@ -155,7 +155,7 @@
   - Validar `estimated_tokens < context_limit - max_output_tokens` antes de enviar
   - Se exceder, reduzir resolução ou número de imagens automaticamente
 
-- [ ] **9.2.5** Implementar cache de análises (evitar re-análise de mesmos screenshots)
+- [X] **9.2.5** Implementar cache de análises (evitar re-análise de mesmos screenshots)
   - Hash SHA-256 dos screenshots + hash do prompt = chave de cache
   - Armazenar resultado no Redis com TTL de 1 hora
   - Se cache hit, retornar resultado cacheado sem chamar LLM
@@ -163,7 +163,7 @@
 
 ### 9.3 Monitoramento e Tracking de Consumo de Tokens
 
-- [ ] **9.3.1** Criar tabela `token_usage` para tracking de consumo
+- [X] **9.3.1** Criar tabela `token_usage` para tracking de consumo
   - Migração Alembic: nova tabela `token_usage`
     - `id` (UUID), `execution_id` (FK), `provider` (str), `model` (str)
     - `input_tokens` (int), `output_tokens` (int), `total_tokens` (int)
@@ -171,7 +171,7 @@
     - `created_at` (datetime)
   - Repository e Service para consultas de consumo
 
-- [ ] **9.3.2** Registrar uso de tokens em cada chamada LLM
+- [X] **9.3.2** Registrar uso de tokens em cada chamada LLM
   - Em cada provider, após `analyze_images()`, salvar em `token_usage`
   - Incluir custo estimado por modelo:
     - Claude Sonnet: $3/1M input, $15/1M output
@@ -179,12 +179,12 @@
     - Gemini 2.0 Flash: $0.10/1M input, $0.40/1M output
   - Atualizar campo `tokens_used` na Execution
 
-- [ ] **9.3.3** Criar endpoint e dashboard de consumo de tokens
+- [X] **9.3.3** Criar endpoint e dashboard de consumo de tokens
   - `GET /api/dashboard/token-usage` — consumo por provider, período, job
   - Métricas: total de tokens, custo estimado, média por execução, tendência
   - Frontend: cards com consumo diário/semanal/mensal e gráfico de tendência
 
-- [ ] **9.3.4** Implementar limites de tokens (budget control)
+- [X] **9.3.4** Implementar limites de tokens (budget control)
   - Configuração em Settings: `token_budget.daily_limit`, `token_budget.monthly_limit`
   - Antes de enviar para LLM, verificar se o budget não foi excedido
   - Se excedido: falhar a execução com mensagem clara, não chamar LLM
