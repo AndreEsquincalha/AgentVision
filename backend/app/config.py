@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     log_levels: str = ''  # Per-module overrides: "app.modules.agents:DEBUG,app.modules.jobs:INFO"
 
     # -------------------------------------------------------------------------
+    # Archiving
+    # -------------------------------------------------------------------------
+    archive_retention_days: int = 90
+    archive_minio_cleanup: bool = True
+
+    # -------------------------------------------------------------------------
     # Admin Seed
     # -------------------------------------------------------------------------
     admin_email: str = 'admin@agentvision.com'

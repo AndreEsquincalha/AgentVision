@@ -87,9 +87,16 @@ celery_app.conf.update(
     # Resultados expiram em 24 horas
     result_expires=86400,
 
-    # Autodiscover de tasks nos modulos
+    # Roteamento de tasks por queue
+    # - default: tarefas leves (dispatch, cleanup, archive, alerts, auth)
+    # - execution: tarefas pesadas com browser (execute_job)
+    # - priority: jobs de alta prioridade (execute_job com priority=high)
     task_routes={
+        'app.modules.jobs.tasks.execute_job': {'queue': 'execution'},
         'app.modules.jobs.tasks.*': {'queue': 'default'},
+        'app.modules.auth.tasks.*': {'queue': 'default'},
+        'app.modules.agents.tasks.*': {'queue': 'default'},
+        'app.modules.alerts.tasks.*': {'queue': 'default'},
     },
 
     # Celery Beat: agendamento periodico
@@ -121,6 +128,10 @@ celery_app.conf.update(
         'evaluate-alert-rules-every-2-minutes': {
             'task': 'app.modules.alerts.tasks.evaluate_alert_rules',
             'schedule': 120.0,  # a cada 2 minutos
+        },
+        'archive-old-executions-weekly': {
+            'task': 'app.modules.jobs.tasks.archive_old_executions',
+            'schedule': 604800.0,  # a cada 7 dias (604800 segundos)
         },
     },
 )

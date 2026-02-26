@@ -3,6 +3,7 @@ import smtplib
 
 from app.modules.settings.repository import SettingRepository
 from app.modules.settings.schemas import SMTPConfigSchema, SettingsGroupResponse
+from app.shared.cache import cached, invalidate_cache
 from app.shared.security import mask_sensitive_dict
 from app.shared.utils import decrypt_value, encrypt_value
 
@@ -31,6 +32,7 @@ class SettingService:
         """Inicializa o servico com o repositorio de configuracoes."""
         self._repository = repository
 
+    @cached(ttl=300, prefix='settings:category')
     def get_settings(self, category: str) -> SettingsGroupResponse:
         """
         Obtem todas as configuracoes de uma categoria com valores descriptografados.
@@ -74,6 +76,9 @@ class SettingService:
         Returns:
             Resposta com categoria e dicionario de configuracoes atualizadas.
         """
+        # Invalida cache da categoria antes de atualizar
+        invalidate_cache('settings:category')
+
         # Obtem descricoes padrao para chaves conhecidas
         for key, value in data.items():
             if value == '****':

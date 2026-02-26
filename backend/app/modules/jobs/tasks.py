@@ -1516,7 +1516,16 @@ def check_and_dispatch_jobs(self) -> dict:
                         next_time.isoformat(),
                     )
 
-                    execute_job.delay(str(job.id), False)
+                    # Roteia para queue 'priority' se job de alta prioridade
+                    target_queue = (
+                        'priority'
+                        if getattr(job, 'priority', 'normal') == 'high'
+                        else 'execution'
+                    )
+                    execute_job.apply_async(
+                        args=[str(job.id), False],
+                        queue=target_queue,
+                    )
                     dispatched_count += 1
 
             except (ValueError, KeyError) as cron_err:
@@ -1715,3 +1724,159 @@ def _run_async(coro) -> 'object':
     except RuntimeError:
         # Nenhum event loop disponivel, cria um novo
         return asyncio.run(coro)
+
+
+# ---------------------------------------------------------------------------
+# Task: Archiving de execucoes antigas (15.1.4)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(name='app.modules.jobs.tasks.archive_old_executions')
+def archive_old_executions() -> dict:
+    """
+    Task semanal que move execucoes antigas para tabela de archive.
+
+    Execucoes com mais de N dias (configuravel via ARCHIVE_RETENTION_DAYS,
+    default: 90) sao comprimidas e movidas para executions_archive.
+    Screenshots e PDFs antigos no MinIO sao removidos opcionalmente.
+    """
+    import gzip
+    from datetime import timedelta
+
+    from sqlalchemy import text
+
+    db = SessionLocal()
+    try:
+        retention_days = settings.archive_retention_days
+        cutoff = utc_now() - timedelta(days=retention_days)
+        cleanup_minio = settings.archive_minio_cleanup
+
+        logger.info(
+            'Iniciando archiving de execucoes anteriores a %s (%d dias)',
+            cutoff.isoformat(),
+            retention_days,
+        )
+
+        # Busca execucoes finalizadas (success/failed) anteriores ao cutoff
+        rows = db.execute(
+            text(
+                'SELECT id, job_id, status, logs, extracted_data, '
+                'screenshots_path, pdf_path, progress_percent, is_dry_run, '
+                'celery_task_id, started_at, finished_at, duration_seconds, '
+                'created_at, updated_at '
+                'FROM executions '
+                "WHERE status IN ('success', 'failed') "
+                'AND created_at < :cutoff '
+                'LIMIT 500'
+            ),
+            {'cutoff': cutoff},
+        ).fetchall()
+
+        if not rows:
+            logger.info('Nenhuma execucao para arquivar.')
+            return {'status': 'ok', 'archived': 0, 'cleaned_files': 0}
+
+        archived_count = 0
+        cleaned_files = 0
+        storage = None
+        if cleanup_minio:
+            try:
+                from app.shared.storage import StorageClient
+                storage = StorageClient()
+            except Exception:
+                logger.warning('Nao foi possivel inicializar StorageClient para limpeza.')
+
+        for row in rows:
+            try:
+                # Comprime logs e extracted_data
+                logs_compressed = None
+                if row.logs:
+                    logs_compressed = gzip.compress(row.logs.encode('utf-8'))
+
+                extracted_compressed = None
+                if row.extracted_data:
+                    import json as _json
+                    extracted_compressed = gzip.compress(
+                        _json.dumps(row.extracted_data).encode('utf-8')
+                    )
+
+                # Insere na tabela archive
+                db.execute(
+                    text(
+                        'INSERT INTO executions_archive '
+                        '(id, job_id, status, logs_compressed, extracted_data_compressed, '
+                        'screenshots_path, pdf_path, progress_percent, is_dry_run, '
+                        'celery_task_id, started_at, finished_at, duration_seconds, '
+                        'created_at, updated_at) '
+                        'VALUES (:id, :job_id, :status, :logs_compressed, :extracted_compressed, '
+                        ':screenshots_path, :pdf_path, :progress_percent, :is_dry_run, '
+                        ':celery_task_id, :started_at, :finished_at, :duration_seconds, '
+                        ':created_at, :updated_at)'
+                    ),
+                    {
+                        'id': row.id,
+                        'job_id': row.job_id,
+                        'status': row.status,
+                        'logs_compressed': logs_compressed,
+                        'extracted_compressed': extracted_compressed,
+                        'screenshots_path': row.screenshots_path,
+                        'pdf_path': row.pdf_path,
+                        'progress_percent': row.progress_percent,
+                        'is_dry_run': row.is_dry_run,
+                        'celery_task_id': row.celery_task_id,
+                        'started_at': row.started_at,
+                        'finished_at': row.finished_at,
+                        'duration_seconds': row.duration_seconds,
+                        'created_at': row.created_at,
+                        'updated_at': row.updated_at,
+                    },
+                )
+
+                # Remove da tabela original (cascade deleta delivery_logs e token_usage)
+                db.execute(
+                    text('DELETE FROM executions WHERE id = :id'),
+                    {'id': row.id},
+                )
+
+                # Limpeza de arquivos no MinIO
+                if storage and cleanup_minio:
+                    for path in [row.screenshots_path, row.pdf_path]:
+                        if path:
+                            try:
+                                # Screenshots podem ser um diretorio (prefixo)
+                                if 'screenshots' in path:
+                                    files = storage.list_files(prefix=path)
+                                    for f in files:
+                                        storage.delete_file(f)
+                                        cleaned_files += 1
+                                else:
+                                    storage.delete_file(path)
+                                    cleaned_files += 1
+                            except Exception:
+                                logger.debug(
+                                    'Falha ao limpar arquivo MinIO: %s', path,
+                                )
+
+                archived_count += 1
+            except Exception as e:
+                logger.warning(
+                    'Erro ao arquivar execucao %s: %s', row.id, str(e)[:200],
+                )
+                continue
+
+        db.commit()
+        logger.info(
+            'Archiving concluido: %d execucoes arquivadas, %d arquivos limpos',
+            archived_count,
+            cleaned_files,
+        )
+        return {
+            'status': 'ok',
+            'archived': archived_count,
+            'cleaned_files': cleaned_files,
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error('Erro no archiving de execucoes: %s', str(e)[:500])
+        return {'status': 'error', 'error': str(e)[:500]}
+    finally:
+        db.close()

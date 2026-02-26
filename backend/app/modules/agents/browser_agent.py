@@ -521,14 +521,12 @@ class BrowserAgent:
         Returns:
             Resultado da navegacao.
         """
-        from playwright.async_api import async_playwright
-
         from app.modules.agents.prompt_to_playwright import PromptToPlaywright
 
         logs: list[str] = []
         screenshots: list[bytes] = []
-        playwright_instance = None
-        browser = None
+        pooled_browser = None
+        context = None
 
         # Inicializa LoopDetector se disponivel
         loop_detector: 'LoopDetector | None' = None
@@ -550,21 +548,13 @@ class BrowserAgent:
                 else f'Prompt: {prompt}'
             )
 
-            playwright_instance = await async_playwright().start()
-            browser = await playwright_instance.chromium.launch(
-                headless=self._headless,
-                args=['--no-sandbox', '--disable-setuid-sandbox'],
+            # Usa o pool de browsers para reutilizacao de instancias
+            from app.modules.agents.browser_pool import get_browser_pool
+            pool = await get_browser_pool(headless=self._headless)
+            context, page, pooled_browser = await pool.acquire(
+                timeout_ms=self._timeout * 1000,
             )
-
-            context = await browser.new_context(
-                viewport={'width': 1280, 'height': 720},
-                ignore_https_errors=True,
-            )
-
-            # Configura timeout geral das paginas
-            context.set_default_timeout(self._timeout * 1000)
-
-            page = await context.new_page()
+            logs.append('Browser adquirido do pool (reutilizacao)')
 
             # --- Fase 1: Navegacao inicial (com timeout granular) ---
             logs.append(f'Navegando para {self._base_url}')
@@ -810,20 +800,17 @@ class BrowserAgent:
             )
 
         finally:
-            # Limpeza dos recursos do navegador
-            if browser:
+            # Libera browser de volta ao pool (fecha apenas o context)
+            if pooled_browser and context:
                 try:
-                    await browser.close()
-                    logs.append('Navegador fechado com sucesso')
-                except Exception as close_err:
+                    from app.modules.agents.browser_pool import get_browser_pool
+                    pool = await get_browser_pool(headless=self._headless)
+                    await pool.release(pooled_browser, context)
+                    logs.append('Browser liberado de volta ao pool')
+                except Exception as release_err:
                     logger.warning(
-                        'Erro ao fechar navegador: %s', str(close_err)
+                        'Erro ao liberar browser para pool: %s', str(release_err)
                     )
-            if playwright_instance:
-                try:
-                    await playwright_instance.stop()
-                except Exception:
-                    pass
 
     # ------------------------------------------------------------------ #
     #  Deteccao de estado da pagina (10.3.3)

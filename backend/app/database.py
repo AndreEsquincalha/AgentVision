@@ -5,12 +5,16 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
-# Cria engine de conexao com o PostgreSQL
+# Cria engine de conexao com o PostgreSQL (via PgBouncer)
+# Com PgBouncer em transaction pooling, o pool local e reduzido
+# pois o PgBouncer gerencia o pool real de conexoes ao PostgreSQL.
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=1800,
+    pool_timeout=30,
     echo=False,
 )
 

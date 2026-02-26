@@ -4,6 +4,8 @@ from croniter import croniter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.shared.cache import cached
+
 from app.modules.dashboard.schemas import (
     CeleryWorkerStatusResponse,
     DashboardSummaryResponse,
@@ -49,6 +51,7 @@ class DashboardService:
         self._job_repository = JobRepository(db)
         self._execution_repository = ExecutionRepository(db)
 
+    @cached(ttl=60, prefix='dashboard:summary')
     def get_summary(self) -> DashboardSummaryResponse:
         """
         Retorna o resumo do dashboard com contagens e metricas reais.
@@ -121,6 +124,7 @@ class DashboardService:
             success_rate_7d=round(success_rate, 2),
         )
 
+    @cached(ttl=30, prefix='dashboard:recent_executions')
     def get_recent_executions(self) -> list[RecentExecutionResponse]:
         """
         Retorna as ultimas 10 execucoes ordenadas por data de criacao.
@@ -155,6 +159,7 @@ class DashboardService:
 
         return results
 
+    @cached(ttl=300, prefix='dashboard:upcoming')
     def get_upcoming_executions(self) -> list[UpcomingExecutionResponse]:
         """
         Retorna as proximas 10 execucoes agendadas.
@@ -194,6 +199,7 @@ class DashboardService:
         upcoming.sort(key=lambda x: x.next_run)
         return upcoming[:10]
 
+    @cached(ttl=60, prefix='dashboard:failures')
     def get_recent_failures(self) -> list[RecentFailureResponse]:
         """
         Retorna execucoes com falha das ultimas 24 horas.
@@ -312,6 +318,7 @@ class DashboardService:
             usage_by_provider=by_provider,
         )
 
+    @cached(ttl=60, prefix='dashboard:operational')
     def get_operational_metrics(self) -> OperationalMetricsResponse:
         """
         Retorna metricas operacionais para o dashboard avancado.

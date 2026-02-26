@@ -700,26 +700,26 @@
 
 ### 15.1 Otimização de Banco de Dados
 
-- [ ] **15.1.1** Adicionar índices estratégicos nas tabelas
+- [X] **15.1.1** Adicionar índices estratégicos nas tabelas
 
   - `executions`: índice composto em `(job_id, status)`, `(job_id, created_at DESC)`
   - `executions`: índice em `status` para busca por execuções running/pending
   - `jobs`: índice em `(is_active, deleted_at)` para query de jobs ativos
   - `delivery_logs`: índice em `(execution_id, status)`
   - `token_usage`: índice em `(execution_id)`, `(provider, created_at)`
-- [ ] **15.1.2** Implementar connection pooling com PgBouncer
+- [X] **15.1.2** Implementar connection pooling com PgBouncer
 
   - Adicionar PgBouncer como service no docker-compose.yml
   - Modo transaction pooling (mais eficiente para web apps)
   - Configurar: `default_pool_size=20, max_client_conn=100`
   - Backend e workers se conectam via PgBouncer, não direto ao PostgreSQL
-- [ ] **15.1.3** Implementar cache Redis para queries frequentes
+- [X] **15.1.3** Implementar cache Redis para queries frequentes
 
   - Cache de dashboard metrics (TTL: 60s)
   - Cache de project/job configs (TTL: 300s, invalidar no update)
   - Cache de settings por categoria (TTL: 300s, invalidar no update)
   - Decorator `@cached(ttl=60)` para facilitar uso
-- [ ] **15.1.4** Implementar archiving de execuções antigas
+- [X] **15.1.4** Implementar archiving de execuções antigas
 
   - Execuções com mais de N dias (configurável, default: 90) movidas para tabela `executions_archive`
   - Task periódica semanal: `archive_old_executions`
@@ -728,19 +728,19 @@
 
 ### 15.2 Otimização do Worker
 
-- [ ] **15.2.1** Configurar Celery worker com concurrency adequada
+- [X] **15.2.1** Configurar Celery worker com concurrency adequada
 
   - Worker concurrency configurável via environment variable `CELERY_CONCURRENCY`
   - Default: `--concurrency=2` para máquinas com <4 cores, `4` para >4 cores
   - `--max-tasks-per-child=50` para evitar memory leaks de Playwright
   - `--max-memory-per-child=2000000` (2GB) como safety net
-- [ ] **15.2.2** Implementar task routing por tipo
+- [X] **15.2.2** Implementar task routing por tipo
 
   - Queue `default`: check_and_dispatch, cleanup, archive
   - Queue `execution`: execute_job (tarefas pesadas com browser)
   - Queue `priority`: execute_job de jobs high_priority
   - Configurar workers dedicados por queue no docker-compose
-- [ ] **15.2.3** Otimizar reutilização de browser context
+- [X] **15.2.3** Otimizar reutilização de browser context
 
   - Manter pool de browser contexts pré-inicializados
   - Em vez de criar/destruir browser a cada execução, reutilizar context do pool

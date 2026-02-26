@@ -272,8 +272,13 @@ class JobService:
             )
 
         # Despacha a task Celery para execucao assincrona
+        # Roteia para queue 'priority' se job de alta prioridade
         from app.modules.jobs.tasks import execute_job
-        execute_job.delay(str(job.id), True)
+        target_queue = 'priority' if job.priority == 'high' else 'execution'
+        execute_job.apply_async(
+            args=[str(job.id), True],
+            queue=target_queue,
+        )
 
         return DryRunResponse(
             job_id=job.id,
