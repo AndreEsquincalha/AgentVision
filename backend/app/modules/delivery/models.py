@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Boolean
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.models import BaseModel, SoftDeleteModel
@@ -53,6 +53,33 @@ class DeliveryConfig(SoftDeleteModel):
         Boolean,
         default=True,
         nullable=False,
+    )
+
+    # --- Retry ---
+    max_retries: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+    )
+    retry_delay_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=60,
+    )
+
+    # --- Condicao de entrega ---
+    delivery_condition: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default='always',
+    )
+
+    # --- Template de email customizado ---
+    email_template_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey('prompt_templates.id', ondelete='SET NULL'),
+        nullable=True,
+        default=None,
     )
 
     # --- Relacionamentos ---
@@ -108,6 +135,18 @@ class DeliveryLog(BaseModel):
         default=None,
     )
     sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
+    # --- Retry ---
+    retry_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+    next_retry_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         default=None,

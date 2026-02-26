@@ -1149,14 +1149,29 @@ def execute_job(self, job_id: str, is_dry_run: bool = False) -> dict:
                         'analysis_text': analysis_text[:500] if analysis_text else '',
                     }
 
+                    # Busca dados extraidos da execucao anterior (para delivery on_change)
+                    previous_extracted = None
+                    try:
+                        prev_exec = execution_repo.get_previous_successful(
+                            job_uuid, execution_id,
+                        )
+                        if prev_exec:
+                            previous_extracted = prev_exec.extracted_data
+                    except Exception:
+                        pass  # Falha na busca nao impede delivery
+
                     delivery_logs = delivery_service.deliver(
                         execution_id=execution_id,
                         delivery_configs=active_delivery_configs,
                         pdf_path=pdf_path,
                         execution_data=execution_data,
+                        execution_status='success',
+                        extracted_data=extracted_data,
+                        previous_extracted_data=previous_extracted,
                     )
 
                     sent_count = sum(1 for dl in delivery_logs if dl.status == 'sent')
+                    retrying_count = sum(1 for dl in delivery_logs if dl.status == 'retrying')
                     failed_count = sum(1 for dl in delivery_logs if dl.status == 'failed')
 
                     if failed_count > 0:

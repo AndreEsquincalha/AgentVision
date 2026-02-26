@@ -756,20 +756,20 @@
 
 ### 16.1 Novos Canais de Entrega
 
-- [ ] **16.1.1** Implementar WebhookChannel
+- [X] **16.1.1** Implementar WebhookChannel
 
   - Classe `WebhookChannel` estendendo `DeliveryChannel`
   - Enviar POST com JSON payload (execution_data + link para PDF)
   - Configuração: URL, headers customizados, método (POST/PUT), auth (Bearer/Basic)
   - Retry com backoff: 3 tentativas com delays de 1s, 5s, 15s
   - Validar HTTPS obrigatório para webhooks em produção
-- [ ] **16.1.2** Implementar SlackChannel
+- [X] **16.1.2** Implementar SlackChannel
 
   - Usar Slack Incoming Webhook API
   - Mensagem formatada com Blocks: título, sumário, link para PDF, status badges
   - Configuração: webhook_url, channel (opcional), mention_on_failure (@here)
   - Anexar preview do sumário executivo
-- [ ] **16.1.3** Implementar canal de armazenamento em disco/S3
+- [X] **16.1.3** Implementar canal de armazenamento em disco/S3
 
   - Salvar PDF em path configurável (local ou S3 bucket externo)
   - Útil para integração com outros sistemas via filesystem
@@ -777,19 +777,19 @@
 
 ### 16.2 Melhorias no Sistema de Delivery
 
-- [ ] **16.2.1** Implementar retry automático com exponential backoff
+- [X] **16.2.1** Implementar retry automático com exponential backoff
 
   - Configuração por delivery config: `max_retries`, `retry_delay_seconds`
   - Backoff: 60s → 120s → 300s (multiplicador: 2.0)
   - Task Celery separada para retry: `retry_failed_delivery`
   - Status intermediário: `retrying` com próximo retry timestamp
-- [ ] **16.2.2** Implementar delivery condicional
+- [X] **16.2.2** Implementar delivery condicional
 
   - Configurar quando enviar: `always`, `on_success`, `on_failure`, `on_change`
   - `on_change`: só entrega se dados extraídos forem diferentes da última execução
   - Campo `delivery_condition` no DeliveryConfig
   - Avaliação de condição antes de enviar
-- [ ] **16.2.3** Implementar template de email customizável
+- [X] **16.2.3** Implementar template de email customizável
 
   - Tabela de templates de email (ou usar PromptTemplate com categoria 'email')
   - Variáveis: `{{project_name}}`, `{{job_name}}`, `{{execution_date}}`, `{{summary}}`, `{{status}}`

@@ -161,18 +161,43 @@ class EmailChannel(DeliveryChannel):
 
             job_name = 'N/A'
             execution_date = 'N/A'
+            project_name = 'N/A'
+            summary = ''
+            status = 'success'
             extra_content = ''
 
             if execution_data:
                 job_name = execution_data.get('job_name', 'N/A')
                 execution_date = execution_data.get('execution_date', 'N/A')
+                project_name = execution_data.get('project_name', 'N/A')
+                summary = execution_data.get('summary', '') or execution_data.get('analysis_text', '')
+                status = execution_data.get('status', 'success')
 
                 # Conteudo extra opcional
-                if execution_data.get('summary'):
+                if summary:
                     extra_content = (
                         f'<p><span class="label">Resumo:</span> '
-                        f'{execution_data["summary"]}</p>'
+                        f'{summary[:500]}</p>'
                     )
+
+            # Tenta usar template customizado (passado via config)
+            custom_template = (config or {}).get('_email_template_content')
+            if custom_template:
+                html_body = self._render_custom_template(
+                    template=custom_template,
+                    project_name=project_name,
+                    job_name=job_name,
+                    execution_date=execution_date,
+                    summary=summary,
+                    status=status,
+                )
+            else:
+                # Template padrao
+                html_body = EMAIL_HTML_TEMPLATE.format(
+                    job_name=job_name,
+                    execution_date=execution_date,
+                    extra_content=extra_content,
+                )
 
             # Monta o email
             msg = MIMEMultipart()
@@ -180,12 +205,6 @@ class EmailChannel(DeliveryChannel):
             msg['To'] = ', '.join(recipients)
             msg['Subject'] = subject
 
-            # Corpo HTML
-            html_body = EMAIL_HTML_TEMPLATE.format(
-                job_name=job_name,
-                execution_date=execution_date,
-                extra_content=extra_content,
-            )
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
             # Anexa o PDF, se disponivel
@@ -238,6 +257,37 @@ class EmailChannel(DeliveryChannel):
             error_msg = f'Erro inesperado ao enviar email: {str(e)}'
             logger.error(error_msg)
             return DeliveryResult(success=False, error_message=error_msg)
+
+    @staticmethod
+    def _render_custom_template(
+        template: str,
+        project_name: str,
+        job_name: str,
+        execution_date: str,
+        summary: str,
+        status: str,
+    ) -> str:
+        """
+        Renderiza um template customizado substituindo variaveis.
+
+        Variaveis suportadas:
+            {{project_name}} - Nome do projeto
+            {{job_name}} - Nome do job
+            {{execution_date}} - Data da execucao
+            {{summary}} - Resumo executivo (truncado a 500 caracteres)
+            {{status}} - Status da execucao
+        """
+        rendered = template
+        variables = {
+            '{{project_name}}': project_name,
+            '{{job_name}}': job_name,
+            '{{execution_date}}': execution_date,
+            '{{summary}}': summary[:500] if summary else '',
+            '{{status}}': status,
+        }
+        for var, value in variables.items():
+            rendered = rendered.replace(var, value)
+        return rendered
 
     def _send_smtp(
         self,

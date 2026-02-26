@@ -130,6 +130,36 @@ class ExecutionRepository:
 
         return list(self._db.execute(stmt).scalars().all())
 
+    def get_previous_successful(
+        self,
+        job_id: uuid.UUID,
+        current_execution_id: uuid.UUID,
+    ) -> Execution | None:
+        """
+        Busca a execucao bem-sucedida anterior a uma execucao especifica.
+
+        Usado para comparacao de dados extraidos (delivery condition on_change).
+
+        Args:
+            job_id: ID do job.
+            current_execution_id: ID da execucao atual (para excluir).
+
+        Returns:
+            Execucao anterior bem-sucedida ou None.
+        """
+        stmt = (
+            select(Execution)
+            .where(
+                Execution.job_id == job_id,
+                Execution.id != current_execution_id,
+                Execution.status == 'success',
+                Execution.is_dry_run.is_(False),
+            )
+            .order_by(Execution.created_at.desc())
+            .limit(1)
+        )
+        return self._db.execute(stmt).scalar_one_or_none()
+
     def create(self, execution_data: dict) -> Execution:
         """
         Cria uma nova execucao no banco de dados.

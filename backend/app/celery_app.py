@@ -97,6 +97,7 @@ celery_app.conf.update(
         'app.modules.auth.tasks.*': {'queue': 'default'},
         'app.modules.agents.tasks.*': {'queue': 'default'},
         'app.modules.alerts.tasks.*': {'queue': 'default'},
+        'app.modules.delivery.tasks.*': {'queue': 'default'},
     },
 
     # Celery Beat: agendamento periodico
@@ -142,4 +143,5 @@ celery_app.autodiscover_tasks([
     'app.modules.auth',
     'app.modules.agents',
     'app.modules.alerts',
+    'app.modules.delivery',
 ])

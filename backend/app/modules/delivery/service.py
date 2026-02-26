@@ -5,6 +5,9 @@ from app.config import settings
 from app.modules.delivery.base_channel import DeliveryChannel, DeliveryResult
 from app.modules.delivery.email_channel import EmailChannel
 from app.modules.delivery.models import DeliveryConfig
+from app.modules.delivery.slack_channel import SlackChannel
+from app.modules.delivery.storage_channel import StorageChannel
+from app.modules.delivery.webhook_channel import WebhookChannel
 from app.modules.delivery.repository import DeliveryRepository
 from app.modules.delivery.schemas import (
     DeliveryConfigCreate,
@@ -85,6 +88,10 @@ class DeliveryService:
             'recipients': data.recipients,
             'channel_config': encrypted_config,
             'is_active': data.is_active,
+            'max_retries': data.max_retries,
+            'retry_delay_seconds': data.retry_delay_seconds,
+            'delivery_condition': data.delivery_condition,
+            'email_template_id': data.email_template_id,
         }
         config = self._repository.create_config(config_data)
         return self._to_response(config)
@@ -146,18 +153,25 @@ class DeliveryService:
         delivery_configs: list[DeliveryConfig],
         pdf_path: str | None = None,
         execution_data: dict | None = None,
+        execution_status: str = 'success',
+        extracted_data: dict | None = None,
+        previous_extracted_data: dict | None = None,
     ) -> list[DeliveryLogResponse]:
         """
         Executa entregas para todos os canais configurados.
 
         Para cada configuracao de entrega ativa, instancia o canal
-        apropriado (Strategy Pattern), tenta enviar e registra o resultado.
+        apropriado (Strategy Pattern), avalia a condicao de entrega,
+        tenta enviar e registra o resultado.
 
         Args:
             execution_id: ID da execucao.
             delivery_configs: Lista de configuracoes de entrega.
             pdf_path: Caminho do PDF no storage.
             execution_data: Dados da execucao para incluir na entrega.
+            execution_status: Status da execucao (success, failed).
+            extracted_data: Dados extraidos da execucao atual.
+            previous_extracted_data: Dados extraidos da execucao anterior (para on_change).
 
         Returns:
             Lista de logs de entrega com resultados.
@@ -167,6 +181,16 @@ class DeliveryService:
         for config in delivery_configs:
             # Ignora configuracoes inativas
             if not config.is_active:
+                continue
+
+            # Avalia condicao de entrega
+            if not self._evaluate_delivery_condition(
+                config, execution_status, extracted_data, previous_extracted_data,
+            ):
+                logger.info(
+                    'Entrega ignorada para config %s: condicao "%s" nao atendida (status=%s)',
+                    config.id, config.delivery_condition, execution_status,
+                )
                 continue
 
             # Cria log com status pendente
@@ -180,6 +204,17 @@ class DeliveryService:
             try:
                 # Instancia o canal correto via Factory
                 decrypted_config = self._decrypt_channel_config(config.channel_config)
+
+                # Injeta template de email customizado, se configurado
+                if (
+                    config.channel_type == 'email'
+                    and config.email_template_id
+                ):
+                    template_content = self._load_email_template(config.email_template_id)
+                    if template_content:
+                        decrypted_config = decrypted_config or {}
+                        decrypted_config['_email_template_content'] = template_content
+
                 channel = self._create_channel(config.channel_type, decrypted_config)
 
                 # Executa a entrega
@@ -197,10 +232,9 @@ class DeliveryService:
                         'sent_at': utc_now(),
                     })
                 else:
-                    self._repository.update_log(log.id, {
-                        'status': 'failed',
-                        'error_message': result.error_message,
-                    })
+                    self._schedule_retry_or_fail(
+                        log, config, result.error_message, pdf_path, execution_data,
+                    )
 
             except Exception as e:
                 logger.error(
@@ -208,10 +242,9 @@ class DeliveryService:
                     config.id,
                     str(e),
                 )
-                self._repository.update_log(log.id, {
-                    'status': 'failed',
-                    'error_message': f'Erro inesperado: {str(e)}',
-                })
+                self._schedule_retry_or_fail(
+                    log, config, f'Erro inesperado: {str(e)}', pdf_path, execution_data,
+                )
 
             # Recarrega o log atualizado
             updated_log = self._repository.get_log_by_id(log.id)
@@ -337,10 +370,11 @@ class DeliveryService:
         if channel_type == 'email':
             return self._create_email_channel(channel_config)
         elif channel_type == 'webhook':
-            # TODO: Implementar WebhookChannel no futuro
-            raise BadRequestException(
-                'Canal webhook ainda nao implementado'
-            )
+            return self._create_webhook_channel(channel_config)
+        elif channel_type == 'slack':
+            return self._create_slack_channel(channel_config)
+        elif channel_type == 'storage':
+            return self._create_storage_channel(channel_config)
         else:
             raise BadRequestException(
                 f'Tipo de canal nao suportado: {channel_type}'
@@ -406,6 +440,201 @@ class DeliveryService:
             smtp_use_tls=bool(smtp_use_tls),
         )
 
+    @staticmethod
+    def _evaluate_delivery_condition(
+        config: DeliveryConfig,
+        execution_status: str,
+        extracted_data: dict | None,
+        previous_extracted_data: dict | None,
+    ) -> bool:
+        """
+        Avalia se a condicao de entrega e atendida.
+
+        Args:
+            config: Configuracao de entrega com delivery_condition.
+            execution_status: Status da execucao (success, failed).
+            extracted_data: Dados extraidos da execucao atual.
+            previous_extracted_data: Dados extraidos da execucao anterior.
+
+        Returns:
+            True se a entrega deve ser realizada.
+        """
+        condition = config.delivery_condition
+
+        if condition == 'always':
+            return True
+        elif condition == 'on_success':
+            return execution_status == 'success'
+        elif condition == 'on_failure':
+            return execution_status in ('failed', 'error')
+        elif condition == 'on_change':
+            # Compara dados extraidos com a execucao anterior
+            if previous_extracted_data is None:
+                # Primeira execucao — sempre entrega
+                return True
+            # Compara JSON stringificado (ordenado) para detectar mudancas
+            import json
+            current = json.dumps(extracted_data or {}, sort_keys=True, default=str)
+            previous = json.dumps(previous_extracted_data, sort_keys=True, default=str)
+            return current != previous
+        else:
+            # Condicao desconhecida — entrega por seguranca
+            return True
+
+    def _schedule_retry_or_fail(
+        self,
+        log: object,
+        config: DeliveryConfig,
+        error_message: str | None,
+        pdf_path: str | None,
+        execution_data: dict | None,
+    ) -> None:
+        """
+        Agenda retry automatico ou marca como falha definitiva.
+
+        Calcula o proximo retry com backoff exponencial (multiplicador 2.0)
+        e agenda a task Celery retry_failed_delivery.
+        """
+        from datetime import timedelta
+
+        current_retry = getattr(log, 'retry_count', 0)
+        max_retries = config.max_retries
+
+        if current_retry < max_retries:
+            # Calcula delay com backoff exponencial
+            base_delay = config.retry_delay_seconds
+            delay = base_delay * (2 ** current_retry)  # 60s, 120s, 240s...
+            delay = min(delay, 3600)  # Cap em 1 hora
+
+            next_retry = utc_now() + timedelta(seconds=delay)
+
+            self._repository.update_log(log.id, {
+                'status': 'retrying',
+                'error_message': error_message,
+                'retry_count': current_retry + 1,
+                'next_retry_at': next_retry,
+            })
+
+            # Agenda task Celery para retry
+            try:
+                from app.modules.delivery.tasks import retry_failed_delivery
+                retry_failed_delivery.apply_async(
+                    args=[str(log.id), pdf_path, execution_data],
+                    countdown=delay,
+                    queue='default',
+                )
+                logger.info(
+                    'Retry %d/%d agendado para log %s em %ds',
+                    current_retry + 1, max_retries, log.id, delay,
+                )
+            except Exception as e:
+                logger.warning(
+                    'Falha ao agendar retry para log %s: %s',
+                    log.id, str(e),
+                )
+                # Se nao conseguiu agendar, marca como failed
+                self._repository.update_log(log.id, {
+                    'status': 'failed',
+                    'error_message': error_message,
+                    'next_retry_at': None,
+                })
+        else:
+            # Sem mais retries — marca como falha definitiva
+            self._repository.update_log(log.id, {
+                'status': 'failed',
+                'error_message': error_message,
+                'next_retry_at': None,
+            })
+
+    def _create_webhook_channel(
+        self,
+        channel_config: dict | None = None,
+    ) -> WebhookChannel:
+        """
+        Cria uma instancia do canal webhook.
+
+        Args:
+            channel_config: Configuracoes do webhook (url, method, headers, auth).
+
+        Returns:
+            Instancia de WebhookChannel configurada.
+        """
+        config = channel_config or {}
+        url = config.get('url', '')
+        if not url:
+            raise BadRequestException(
+                'URL do webhook nao configurada. '
+                'Configure o campo "url" nas configuracoes do canal.'
+            )
+
+        return WebhookChannel(
+            url=url,
+            method=config.get('method', 'POST'),
+            headers=config.get('headers'),
+            auth_type=config.get('auth_type'),
+            auth_token=config.get('auth_token'),
+            auth_user=config.get('auth_user'),
+            auth_password=config.get('auth_password'),
+            verify_ssl=config.get('verify_ssl', True),
+        )
+
+    def _create_slack_channel(
+        self,
+        channel_config: dict | None = None,
+    ) -> SlackChannel:
+        """
+        Cria uma instancia do canal Slack.
+
+        Args:
+            channel_config: Configuracoes do Slack (webhook_url, channel, etc.).
+
+        Returns:
+            Instancia de SlackChannel configurada.
+        """
+        config = channel_config or {}
+        webhook_url = config.get('webhook_url', '')
+        if not webhook_url:
+            raise BadRequestException(
+                'URL do webhook Slack nao configurada. '
+                'Configure o campo "webhook_url" nas configuracoes do canal.'
+            )
+
+        return SlackChannel(
+            webhook_url=webhook_url,
+            channel=config.get('channel'),
+            mention_on_failure=config.get('mention_on_failure', True),
+            username=config.get('username', 'AgentVision'),
+            icon_emoji=config.get('icon_emoji', ':robot_face:'),
+        )
+
+    def _create_storage_channel(
+        self,
+        channel_config: dict | None = None,
+    ) -> StorageChannel:
+        """
+        Cria uma instancia do canal de armazenamento.
+
+        Args:
+            channel_config: Configuracoes do storage (storage_type, path_template, etc.).
+
+        Returns:
+            Instancia de StorageChannel configurada.
+        """
+        config = channel_config or {}
+
+        return StorageChannel(
+            storage_type=config.get('storage_type', 'local'),
+            path_template=config.get(
+                'path_template',
+                '{project}/{job}/{date}/report.pdf',
+            ),
+            base_path=config.get('base_path', '/data/reports'),
+            s3_bucket=config.get('s3_bucket'),
+            s3_endpoint=config.get('s3_endpoint'),
+            s3_access_key=config.get('s3_access_key'),
+            s3_secret_key=config.get('s3_secret_key'),
+        )
+
     # -------------------------------------------------------------------------
     # Metodos auxiliares privados
     # -------------------------------------------------------------------------
@@ -424,7 +653,11 @@ class DeliveryService:
         """
         update_data: dict = {}
 
-        fields = ['channel_type', 'recipients', 'channel_config', 'is_active']
+        fields = [
+            'channel_type', 'recipients', 'channel_config', 'is_active',
+            'max_retries', 'retry_delay_seconds', 'delivery_condition',
+            'email_template_id',
+        ]
 
         for field in fields:
             value = getattr(data, field)
@@ -435,6 +668,38 @@ class DeliveryService:
                     update_data[field] = value
 
         return update_data
+
+    def _load_email_template(self, template_id: uuid.UUID) -> str | None:
+        """
+        Carrega o conteudo de um template de email customizado.
+
+        Args:
+            template_id: ID do PromptTemplate.
+
+        Returns:
+            Conteudo HTML do template ou None se nao encontrado.
+        """
+        try:
+            from app.modules.prompts.models import PromptTemplate
+            from sqlalchemy import select
+
+            stmt = select(PromptTemplate).where(
+                PromptTemplate.id == template_id,
+                PromptTemplate.deleted_at.is_(None),
+            )
+            template = self._repository._db.execute(stmt).scalar_one_or_none()
+            if template:
+                return template.content
+            logger.warning(
+                'Template de email %s nao encontrado, usando template padrao',
+                template_id,
+            )
+        except Exception as e:
+            logger.warning(
+                'Erro ao carregar template de email %s: %s',
+                template_id, str(e),
+            )
+        return None
 
     def _decrypt_channel_config(self, encrypted_value: str | None) -> dict | None:
         """
@@ -461,6 +726,10 @@ class DeliveryService:
             recipients=config.recipients,
             channel_config=masked,
             is_active=config.is_active,
+            max_retries=config.max_retries,
+            retry_delay_seconds=config.retry_delay_seconds,
+            delivery_condition=config.delivery_condition,
+            email_template_id=config.email_template_id,
             created_at=config.created_at,
             updated_at=config.updated_at,
         )
