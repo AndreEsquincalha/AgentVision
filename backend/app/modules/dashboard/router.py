@@ -8,6 +8,8 @@ from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.dashboard.schemas import (
     DashboardSummaryResponse,
+    LLMProviderHealthListResponse,
+    LLMProviderHealthResponse,
     RecentExecutionResponse,
     RecentFailureResponse,
     TokenUsageResponse,
@@ -126,3 +128,67 @@ def get_token_usage(
         date_to=date_to,
         provider=provider,
     )
+
+
+@router.get('/llm-providers-health', response_model=LLMProviderHealthListResponse)
+def get_llm_providers_health(
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
+) -> LLMProviderHealthListResponse:
+    """
+    Retorna o status de saude dos providers LLM.
+
+    Inclui latencia, disponibilidade e estado do circuit breaker
+    para cada provider. Os dados vem do ultimo health check periodico.
+
+    Requer autenticacao via access token.
+    """
+    from app.modules.agents.llm_resilience import (
+        circuit_breaker,
+        get_all_health_statuses,
+    )
+
+    health_statuses = get_all_health_statuses()
+    cb_states = circuit_breaker.get_all_states()
+
+    providers = [
+        LLMProviderHealthResponse(
+            provider=s['provider'],
+            status=s['status'],
+            latency_ms=s['latency_ms'],
+            last_check=s['last_check'],
+            error=s.get('error'),
+        )
+        for s in health_statuses
+    ]
+
+    circuit_breaker_map = {
+        name: state.state
+        for name, state in cb_states.items()
+    }
+
+    return LLMProviderHealthListResponse(
+        providers=providers,
+        circuit_breakers=circuit_breaker_map,
+    )
+
+
+@router.get('/ollama-models', response_model=list[dict])
+def get_ollama_models(
+    ollama_url: str = Query(
+        default='http://localhost:11434',
+        description='URL do servidor Ollama',
+    ),
+    current_user: User = Depends(require_roles('admin', 'operator')),
+) -> list[dict]:
+    """
+    Lista modelos disponiveis no servidor Ollama (13.3.2).
+
+    Retorna nome, tamanho e se o modelo tem suporte a visao.
+    """
+    from app.modules.agents.llm_provider import OllamaProvider
+
+    provider = OllamaProvider(
+        api_key=ollama_url,
+        model='',
+    )
+    return provider.list_models()

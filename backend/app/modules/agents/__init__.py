@@ -6,10 +6,18 @@ from app.modules.agents.llm_provider import (
     AnalysisResult,
     AnthropicProvider,
     BaseLLMProvider,
+    BedrockProvider,
     GoogleProvider,
     OllamaProvider,
+    OpenAICompatibleProvider,
     OpenAIProvider,
     get_llm_provider,
+)
+from app.modules.agents.llm_resilience import (
+    LLMCircuitBreaker,
+    LLMFallbackChain,
+    circuit_breaker,
+    retry_with_backoff,
 )
 from app.modules.agents.loop_detector import LoopDetection, LoopDetector
 from app.modules.agents.pdf_generator import PDFGenerator
@@ -25,15 +33,19 @@ __all__ = [
     'AnalysisResult',
     'AnthropicProvider',
     'BaseLLMProvider',
+    'BedrockProvider',
     'BrowserAgent',
     'BrowserResult',
     'ClassifiedScreenshot',
     'ExecutionValidator',
     'GoogleProvider',
     'ImageOptimizer',
+    'LLMCircuitBreaker',
+    'LLMFallbackChain',
     'LoopDetection',
     'LoopDetector',
     'OllamaProvider',
+    'OpenAICompatibleProvider',
     'OpenAIProvider',
     'PDFGenerator',
     'PlaywrightAction',
@@ -45,5 +57,7 @@ __all__ = [
     'TokenUsage',
     'ValidationResult',
     'VisionAnalyzer',
+    'circuit_breaker',
     'get_llm_provider',
+    'retry_with_backoff',
 ]

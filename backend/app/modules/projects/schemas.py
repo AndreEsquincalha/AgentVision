@@ -115,7 +115,7 @@ class ProjectCreate(BaseModel):
     @classmethod
     def validate_llm_provider(cls, v: str) -> str:
         """Valida que o provedor LLM e suportado."""
-        allowed_providers = ('anthropic', 'openai', 'google', 'ollama')
+        allowed_providers = ('anthropic', 'openai', 'openai-compatible', 'google', 'ollama', 'bedrock')
         if v.lower() not in allowed_providers:
             raise ValueError(
                 f'Provedor LLM invalido. Valores permitidos: {", ".join(allowed_providers)}'
@@ -203,7 +203,7 @@ class ProjectUpdate(BaseModel):
         """Valida que o provedor LLM e suportado (se fornecido)."""
         if v is None:
             return v
-        allowed_providers = ('anthropic', 'openai', 'google', 'ollama')
+        allowed_providers = ('anthropic', 'openai', 'openai-compatible', 'google', 'ollama', 'bedrock')
         if v.lower() not in allowed_providers:
             raise ValueError(
                 f'Provedor LLM invalido. Valores permitidos: {", ".join(allowed_providers)}'

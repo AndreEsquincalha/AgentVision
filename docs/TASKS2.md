@@ -554,27 +554,27 @@
 
 ### 13.1 Resiliência das Chamadas LLM
 
-- [ ] **13.1.1** Implementar retry com exponential backoff em todos os providers
+- [X] **13.1.1** Implementar retry com exponential backoff em todos os providers
 
   - Criar decorator `@retry_with_backoff(max_retries=3, base_delay=1.0, max_delay=30.0)`
   - Aplicar em `analyze_image()` e `analyze_images()` de cada provider
   - Retries apenas para erros transientes (429 Rate Limit, 500 Server Error, timeout, connection error)
   - Não fazer retry para erros permanentes (401 Unauthorized, 400 Bad Request, 404)
   - Jitter aleatório para evitar thundering herd
-- [ ] **13.1.2** Implementar fallback automático entre providers
+- [X] **13.1.2** Implementar fallback automático entre providers
 
   - Configurar providers de fallback por projeto: `fallback_providers: ['openai', 'google']`
   - Se provider primário falhar após todos os retries, tentar o próximo na lista
   - Log: `"Provider {primary} falhou, tentando fallback {secondary}"`
   - Registrar qual provider realmente foi usado na execução
-- [ ] **13.1.3** Implementar circuit breaker para APIs de LLM
+- [X] **13.1.3** Implementar circuit breaker para APIs de LLM
 
   - Se um provider falhar N vezes consecutivas (ex: 5), abrir circuit breaker
   - Circuit aberto: pular direto para fallback provider (evitar desperdício de tempo)
   - Após cooldown (ex: 5 min), tentar half-open (1 chamada de teste)
   - Se teste funcionar, fechar circuit; senão, manter aberto mais um período
   - Persistir estado do circuit breaker em Redis
-- [ ] **13.1.4** Adicionar health check periódico para providers LLM
+- [X] **13.1.4** Adicionar health check periódico para providers LLM
 
   - Task Celery a cada 10 min: testar cada provider configurado com prompt mínimo
   - Registrar latência e disponibilidade em Redis
@@ -583,25 +583,25 @@
 
 ### 13.2 Melhorias na Qualidade da Análise
 
-- [ ] **13.2.1** Implementar system prompt customizável por job
+- [X] **13.2.1** Implementar system prompt customizável por job
 
   - Permitir que o usuário defina system prompt adicional no job
   - Merge com o `_SYSTEM_PROMPT_TEMPLATE` base
   - Usar PromptTemplate vinculado ao job para personalização
   - Variáveis de template: `{{project_name}}`, `{{job_name}}`, `{{url}}`, `{{date}}`
-- [ ] **13.2.2** Implementar extração de dados tipada (schema enforcement)
+- [X] **13.2.2** Implementar extração de dados tipada (schema enforcement)
 
   - Definir JSON Schema esperado no job (campo `expected_schema` em execution_params)
   - Instruir o LLM a retornar dados no formato especificado
   - Validar resposta contra o schema após extração
   - Se validação falhar, reenviar com correção: `"Sua resposta não seguiu o schema. Corrija: {errors}"`
-- [ ] **13.2.3** Adicionar modo "structured output" usando tool/function calling
+- [X] **13.2.3** Adicionar modo "structured output" usando tool/function calling
 
   - Anthropic: usar tool_use para forçar JSON estruturado
   - OpenAI: usar function_calling ou response_format (json_object)
   - Google: usar response_schema em GenerationConfig
   - Melhora significativa na confiabilidade da extração de dados
-- [ ] **13.2.4** Implementar comparação de análises entre execuções
+- [X] **13.2.4** Implementar comparação de análises entre execuções
 
   - Armazenar hash + resumo de cada análise
   - Detectar quando análise é significativamente diferente da anterior
@@ -610,17 +610,17 @@
 
 ### 13.3 Suporte Avançado a Providers
 
-- [ ] **13.3.1** Adicionar suporte a OpenAI-compatible APIs (Groq, Together, etc.)
+- [X] **13.3.1** Adicionar suporte a OpenAI-compatible APIs (Groq, Together, etc.)
 
   - Estender `OpenAIProvider` para aceitar `base_url` customizada
   - Configuração no projeto: `provider: 'openai-compatible', base_url: 'https://api.groq.com/openai/v1'`
   - Suportar modelos Groq (Llama), Together (Mixtral), etc.
-- [ ] **13.3.2** Implementar Ollama provider com streaming e detecção de modelos
+- [X] **13.3.2** Implementar Ollama provider com streaming e detecção de modelos
 
   - Endpoint de health check: `GET /api/tags` para listar modelos disponíveis
   - Streaming: suporte a `stream: true` para feedback em tempo real
   - Auto-detecção de modelos com visão (filtrar por capacidade `vision`)
-- [ ] **13.3.3** Adicionar suporte a AWS Bedrock como provider
+- [X] **13.3.3** Adicionar suporte a AWS Bedrock como provider
 
   - Provider `BedrockProvider` usando boto3
   - Suporte a Claude no Bedrock, Llama no Bedrock

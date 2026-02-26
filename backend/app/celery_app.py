@@ -55,6 +55,10 @@ celery_app.conf.update(
             'task': 'app.modules.auth.tasks.cleanup_token_blacklist',
             'schedule': 3600.0,
         },
+        'check-llm-providers-health-every-10-minutes': {
+            'task': 'app.modules.agents.tasks.check_llm_providers_health',
+            'schedule': 600.0,  # a cada 10 minutos
+        },
     },
 )
 
@@ -62,4 +66,5 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks([
     'app.modules.jobs',
     'app.modules.auth',
+    'app.modules.agents',
 ])

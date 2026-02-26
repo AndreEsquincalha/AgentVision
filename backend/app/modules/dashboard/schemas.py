@@ -119,3 +119,24 @@ class TokenUsageResponse(BaseModel):
     total_calls: int = 0
     avg_tokens_per_call: float = 0.0
     usage_by_provider: list[ProviderUsageResponse] = []
+
+
+class LLMProviderHealthResponse(BaseModel):
+    """Status de saude de um provider LLM."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    provider: str
+    status: str  # online, degraded, offline, unknown
+    latency_ms: float = 0.0
+    last_check: float = 0.0
+    error: str | None = None
+
+
+class LLMProviderHealthListResponse(BaseModel):
+    """Lista de status de saude dos providers LLM."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    providers: list[LLMProviderHealthResponse] = []
+    circuit_breakers: dict[str, str] = {}  # provider -> state
