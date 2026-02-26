@@ -635,19 +635,19 @@
 
 ### 14.1 Logging Estruturado
 
-- [ ] **14.1.1** Migrar para logging estruturado (JSON) em todo o backend
+- [X] **14.1.1** Migrar para logging estruturado (JSON) em todo o backend
 
   - Instalar e configurar `structlog` ou `python-json-logger`
   - Formato: `{"timestamp": "...", "level": "...", "logger": "...", "message": "...", "extra": {...}}`
   - Adicionar `request_id` (UUID) a cada request HTTP via middleware
   - Propagar `request_id` para tasks Celery via headers
-- [ ] **14.1.2** Implementar correlation ID para rastreamento end-to-end
+- [X] **14.1.2** Implementar correlation ID para rastreamento end-to-end
 
   - Gerar `correlation_id` no request HTTP ou na task Celery
   - Propagar em todas as chamadas internas: repositórios, serviços, LLM calls
   - Incluir `correlation_id` nos logs de todos os componentes
   - Permite reconstruir o fluxo completo de uma execução em qualquer ferramenta de logs
-- [ ] **14.1.3** Configurar log levels por módulo
+- [X] **14.1.3** Configurar log levels por módulo
 
   - Config via variável de ambiente: `LOG_LEVELS=app.modules.agents:DEBUG,app.modules.jobs:INFO`
   - Default: INFO para produção, DEBUG para desenvolvimento
@@ -655,7 +655,7 @@
 
 ### 14.2 Métricas e Dashboards
 
-- [ ] **14.2.1** Adicionar métricas Prometheus via `prometheus-fastapi-instrumentator`
+- [X] **14.2.1** Adicionar métricas Prometheus via `prometheus-fastapi-instrumentator`
 
   - Métricas automáticas: request count, latency, error rate por endpoint
   - Métricas custom:
@@ -664,7 +664,7 @@
     - `agentvision_llm_tokens_total` (counter, labels: provider, model)
     - `agentvision_screenshots_captured_total` (counter)
     - `agentvision_active_executions` (gauge)
-- [ ] **14.2.2** Adicionar health check abrangente
+- [X] **14.2.2** Adicionar health check abrangente
 
   - `GET /api/health` retornando status de cada componente:
     - PostgreSQL: connection + query test
@@ -672,7 +672,7 @@
     - MinIO: bucket access test
     - Celery: ping workers
   - Status geral: `healthy` se todos OK, `degraded` se algum falhar, `unhealthy` se crítico falhar
-- [ ] **14.2.3** Criar dashboard de métricas operacionais no frontend
+- [X] **14.2.3** Criar dashboard de métricas operacionais no frontend
 
   - Cards: total execuções hoje, taxa de sucesso, tempo médio, tokens gastos
   - Gráfico: execuções por hora (últimas 24h)
@@ -682,7 +682,7 @@
 
 ### 14.3 Alertas
 
-- [ ] **14.3.1** Implementar sistema de alertas baseado em regras
+- [X] **14.3.1** Implementar sistema de alertas baseado em regras
   - Regras configuráveis:
     - Taxa de falha > 50% nas últimas N execuções
     - Execução com duração > N minutos

@@ -6,6 +6,8 @@ from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.settings.repository import SettingRepository
 from app.modules.settings.schemas import (
+    LogLevelResponse,
+    LogLevelUpdate,
     SMTPConfigSchema,
     SettingsBulkUpdate,
     SettingsGroupResponse,
@@ -44,6 +46,48 @@ def get_setting_service(
 
 # IMPORTANTE: Rotas especificas (como /smtp/test) devem vir ANTES de rotas
 # parametrizadas (como /{category}) para evitar conflitos de matching.
+
+
+@router.get('/log-levels', response_model=LogLevelResponse)
+def get_log_levels(
+    current_user: User = Depends(require_roles('admin')),
+) -> LogLevelResponse:
+    """
+    Retorna os log levels atualmente configurados.
+
+    Inclui o nivel global e overrides por modulo.
+    Requer role admin.
+    """
+    import logging as _logging
+
+    from app.shared.logging import get_current_log_levels
+
+    return LogLevelResponse(
+        levels=get_current_log_levels(),
+        global_level=_logging.getLevelName(_logging.getLogger().level),
+    )
+
+
+@router.put('/log-levels', response_model=LogLevelResponse)
+def update_log_levels(
+    data: LogLevelUpdate,
+    current_user: User = Depends(require_roles('admin')),
+) -> LogLevelResponse:
+    """
+    Atualiza log levels em runtime.
+
+    Permite alterar niveis de log por modulo sem reiniciar a aplicacao.
+    Requer role admin.
+    """
+    import logging as _logging
+
+    from app.shared.logging import get_current_log_levels, update_runtime_log_levels
+
+    update_runtime_log_levels(data.levels)
+    return LogLevelResponse(
+        levels=get_current_log_levels(),
+        global_level=_logging.getLevelName(_logging.getLogger().level),
+    )
 
 
 @router.post('/smtp/test', response_model=MessageResponse)

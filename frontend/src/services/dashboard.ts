@@ -5,6 +5,7 @@ import type {
   Execution,
   UpcomingExecution,
   RecentFailure,
+  OperationalMetrics,
 } from '@/types';
 
 /**
@@ -48,6 +49,16 @@ export async function getUpcomingExecutions(): Promise<UpcomingExecution[]> {
 export async function getRecentFailures(): Promise<RecentFailure[]> {
   const response = await api.get<RecentFailure[]>(
     API_ENDPOINTS.DASHBOARD.RECENT_FAILURES
+  );
+  return response.data;
+}
+
+/**
+ * Busca métricas operacionais (execuções por hora, duração por job, workers).
+ */
+export async function getOperationalMetrics(): Promise<OperationalMetrics> {
+  const response = await api.get<OperationalMetrics>(
+    API_ENDPOINTS.DASHBOARD.OPERATIONAL_METRICS
   );
   return response.data;
 }

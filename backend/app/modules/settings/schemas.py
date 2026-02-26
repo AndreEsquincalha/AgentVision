@@ -123,6 +123,38 @@ class SettingsBulkUpdate(BaseModel):
         return cleaned
 
 
+class LogLevelUpdate(BaseModel):
+    """Schema para atualizacao de log levels em runtime."""
+
+    levels: dict[str, str] = Field(
+        ...,
+        description='Dicionario de modulo -> nivel (ex: {"app.modules.agents": "DEBUG"})',
+    )
+
+    @field_validator('levels')
+    @classmethod
+    def validate_levels(cls, v: dict[str, str]) -> dict[str, str]:
+        """Valida que os niveis sao validos."""
+        valid_levels = {'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}
+        cleaned: dict[str, str] = {}
+        for module, level in v.items():
+            level_upper = level.strip().upper()
+            if level_upper not in valid_levels:
+                raise ValueError(
+                    f'Nivel invalido "{level}" para modulo "{module}". '
+                    f'Valores permitidos: {", ".join(sorted(valid_levels))}'
+                )
+            cleaned[sanitize_text(module.strip())] = level_upper
+        return cleaned
+
+
+class LogLevelResponse(BaseModel):
+    """Schema de resposta com log levels atuais."""
+
+    levels: dict[str, str]
+    global_level: str
+
+
 class SMTPConfigSchema(BaseModel):
     """
     Schema para configuracao e teste de conexao SMTP.

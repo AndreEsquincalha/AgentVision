@@ -1,18 +1,25 @@
 from datetime import datetime, timedelta
 
 from croniter import croniter
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.dashboard.schemas import (
+    CeleryWorkerStatusResponse,
     DashboardSummaryResponse,
+    DurationByJobResponse,
     ExecutionStatusCounts,
+    ExecutionsPerHourResponse,
+    OperationalMetricsResponse,
     ProviderUsageResponse,
     RecentExecutionResponse,
     RecentFailureResponse,
     TokenUsageResponse,
     UpcomingExecutionResponse,
 )
+from app.modules.executions.models import Execution
 from app.modules.executions.repository import ExecutionRepository
+from app.modules.jobs.models import Job
 from app.modules.jobs.repository import JobRepository
 from app.modules.projects.repository import ProjectRepository
 from app.shared.utils import utc_now
@@ -304,3 +311,143 @@ class DashboardService:
             avg_tokens_per_call=round(avg_per_call, 1),
             usage_by_provider=by_provider,
         )
+
+    def get_operational_metrics(self) -> OperationalMetricsResponse:
+        """
+        Retorna metricas operacionais para o dashboard avancado.
+
+        Inclui execucoes por hora (24h), duracao media por job (top 10),
+        status dos workers Celery e tokens do dia.
+        """
+        now = utc_now()
+
+        # --- Execucoes por hora (ultimas 24h) ---
+        hours_ago_24 = now - timedelta(hours=24)
+        executions_per_hour = self._get_executions_per_hour(hours_ago_24, now)
+
+        # --- Duracao media por job (top 10, ultimos 7 dias) ---
+        seven_days_ago = now - timedelta(days=7)
+        duration_by_job = self._get_duration_by_job(seven_days_ago, now)
+
+        # --- Status dos workers Celery ---
+        workers = self._get_celery_workers_status()
+
+        # --- Tokens do dia ---
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        from app.modules.agents.token_tracker import TokenTracker
+        total_tokens_today = TokenTracker.get_total_tokens_for_period(
+            date_from=today_start,
+            date_to=now,
+        )
+
+        # --- Duracao media hoje ---
+        avg_stmt = select(func.avg(Execution.duration_seconds)).where(
+            Execution.created_at >= today_start,
+            Execution.created_at <= now,
+            Execution.duration_seconds.isnot(None),
+        )
+        avg_duration = self._db.execute(avg_stmt).scalar() or 0.0
+
+        return OperationalMetricsResponse(
+            executions_per_hour=executions_per_hour,
+            duration_by_job=duration_by_job,
+            workers=workers,
+            total_tokens_today=total_tokens_today,
+            avg_duration_today=round(float(avg_duration), 1),
+        )
+
+    def _get_executions_per_hour(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> list[ExecutionsPerHourResponse]:
+        """Retorna contagem de execucoes agrupadas por hora."""
+        from sqlalchemy import case, extract
+
+        # Agrupa por hora truncada
+        hour_expr = func.date_trunc('hour', Execution.created_at)
+
+        stmt = select(
+            hour_expr.label('hour'),
+            func.count(Execution.id).label('total'),
+            func.count(case(
+                (Execution.status == 'success', 1),
+            )).label('success'),
+            func.count(case(
+                (Execution.status == 'failed', 1),
+            )).label('failed'),
+        ).where(
+            Execution.created_at >= date_from,
+            Execution.created_at <= date_to,
+        ).group_by('hour').order_by('hour')
+
+        rows = self._db.execute(stmt).all()
+
+        return [
+            ExecutionsPerHourResponse(
+                hour=row.hour.isoformat() if row.hour else '',
+                total=row.total,
+                success=row.success,
+                failed=row.failed,
+            )
+            for row in rows
+        ]
+
+    def _get_duration_by_job(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> list[DurationByJobResponse]:
+        """Retorna duracao media de execucao por job (top 10)."""
+        stmt = select(
+            Execution.job_id,
+            Job.name.label('job_name'),
+            func.avg(Execution.duration_seconds).label('avg_duration'),
+            func.count(Execution.id).label('exec_count'),
+        ).join(
+            Job, Execution.job_id == Job.id,
+        ).where(
+            Execution.created_at >= date_from,
+            Execution.created_at <= date_to,
+            Execution.duration_seconds.isnot(None),
+            Execution.status == 'success',
+        ).group_by(
+            Execution.job_id, Job.name,
+        ).order_by(
+            func.avg(Execution.duration_seconds).desc(),
+        ).limit(10)
+
+        rows = self._db.execute(stmt).all()
+
+        return [
+            DurationByJobResponse(
+                job_id=row.job_id,
+                job_name=row.job_name,
+                avg_duration_seconds=round(float(row.avg_duration), 1),
+                execution_count=row.exec_count,
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _get_celery_workers_status() -> list[CeleryWorkerStatusResponse]:
+        """Retorna status dos workers Celery."""
+        try:
+            from app.celery_app import celery_app as _celery
+
+            inspector = _celery.control.inspect(timeout=3.0)
+            ping_result = inspector.ping() or {}
+            active_result = inspector.active() or {}
+
+            workers: list[CeleryWorkerStatusResponse] = []
+            for name in ping_result:
+                active_tasks = len(active_result.get(name, []))
+                workers.append(CeleryWorkerStatusResponse(
+                    name=name,
+                    status='online',
+                    active_tasks=active_tasks,
+                ))
+
+            return workers
+        except Exception:
+            return []

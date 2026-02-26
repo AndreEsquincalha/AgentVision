@@ -1,6 +1,22 @@
-from celery import Celery
+from celery import Celery, signals
 
 from app.config import settings
+from app.shared.logging import (
+    correlation_id_var,
+    generate_id,
+    get_logger,
+    request_id_var,
+    setup_logging,
+)
+
+# Inicializa logging estruturado para workers Celery
+setup_logging(
+    log_level=settings.log_level,
+    log_format=settings.log_format,
+    log_levels=settings.log_levels,
+)
+
+logger = get_logger(__name__)
 
 # Instancia do Celery configurada com Redis como broker e backend
 celery_app = Celery(
@@ -8,6 +24,49 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
 )
+
+
+# ---------------------------------------------------------------------------
+# Propagacao de request_id/correlation_id via headers Celery
+# ---------------------------------------------------------------------------
+
+@signals.before_task_publish.connect
+def propagate_context_to_task(headers: dict, **kwargs) -> None:
+    """Propaga request_id e correlation_id para tasks Celery via headers."""
+    req_id = request_id_var.get()
+    corr_id = correlation_id_var.get()
+    if req_id:
+        headers['x_request_id'] = req_id
+    if corr_id:
+        headers['x_correlation_id'] = corr_id
+
+
+@signals.task_prerun.connect
+def restore_context_in_task(task_id: str, task: object, **kwargs) -> None:
+    """Restaura request_id e correlation_id do header da task Celery."""
+    request = getattr(task, 'request', None)
+    if not request:
+        return
+
+    # Ler headers propagados ou gerar novos
+    req_id = getattr(request, 'x_request_id', None) or generate_id()
+    corr_id = getattr(request, 'x_correlation_id', None) or generate_id()
+
+    request_id_var.set(req_id)
+    correlation_id_var.set(corr_id)
+
+    logger.info(
+        'task_started',
+        task_name=getattr(request, 'task', 'unknown'),
+        celery_task_id=task_id,
+    )
+
+
+@signals.task_postrun.connect
+def clear_context_after_task(task_id: str, **kwargs) -> None:
+    """Limpa context vars apos execucao da task."""
+    request_id_var.set(None)
+    correlation_id_var.set(None)
 
 # Configuracoes do Celery
 celery_app.conf.update(
@@ -59,6 +118,10 @@ celery_app.conf.update(
             'task': 'app.modules.agents.tasks.check_llm_providers_health',
             'schedule': 600.0,  # a cada 10 minutos
         },
+        'evaluate-alert-rules-every-2-minutes': {
+            'task': 'app.modules.alerts.tasks.evaluate_alert_rules',
+            'schedule': 120.0,  # a cada 2 minutos
+        },
     },
 )
 
@@ -67,4 +130,5 @@ celery_app.autodiscover_tasks([
     'app.modules.jobs',
     'app.modules.auth',
     'app.modules.agents',
+    'app.modules.alerts',
 ])

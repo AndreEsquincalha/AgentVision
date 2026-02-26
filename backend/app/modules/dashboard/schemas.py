@@ -121,6 +121,50 @@ class TokenUsageResponse(BaseModel):
     usage_by_provider: list[ProviderUsageResponse] = []
 
 
+class ExecutionsPerHourResponse(BaseModel):
+    """Execucoes agrupadas por hora (ultimas 24h)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    hour: str  # ISO format: "2026-02-26T14:00:00"
+    total: int = 0
+    success: int = 0
+    failed: int = 0
+
+
+class DurationByJobResponse(BaseModel):
+    """Duracao media de execucao por job (top 10)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: uuid.UUID
+    job_name: str
+    avg_duration_seconds: float
+    execution_count: int
+
+
+class CeleryWorkerStatusResponse(BaseModel):
+    """Status de um worker Celery."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    status: str  # online, offline
+    active_tasks: int = 0
+
+
+class OperationalMetricsResponse(BaseModel):
+    """Metricas operacionais agregadas para o dashboard."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    executions_per_hour: list[ExecutionsPerHourResponse] = []
+    duration_by_job: list[DurationByJobResponse] = []
+    workers: list[CeleryWorkerStatusResponse] = []
+    total_tokens_today: int = 0
+    avg_duration_today: float = 0.0
+
+
 class LLMProviderHealthResponse(BaseModel):
     """Status de saude de um provider LLM."""
 

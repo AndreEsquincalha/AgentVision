@@ -1,4 +1,3 @@
-import logging
 import re
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
@@ -15,11 +14,26 @@ from app.shared.exceptions import (
     NotFoundException,
     UnauthorizedException,
 )
+from app.shared.logging import (
+    correlation_id_var,
+    generate_id,
+    get_logger,
+    request_id_var,
+    setup_logging,
+    user_id_var,
+)
 from app.modules.audit.repository import AuditLogRepository
 from app.modules.audit.service import AuditLogService
 from app.modules.auth.service import decode_token
 
-logger = logging.getLogger(__name__)
+# Inicializa logging estruturado antes de qualquer outro codigo
+setup_logging(
+    log_level=settings.log_level,
+    log_format=settings.log_format,
+    log_levels=settings.log_levels,
+)
+
+logger = get_logger(__name__)
 
 # Limites e headers de seguranca
 _MAX_BODY_SIZE_BYTES = 10 * 1024 * 1024
@@ -137,6 +151,53 @@ app.add_middleware(
     ],
     expose_headers=['Content-Disposition'],
 )
+
+# -------------------------------------------------------------------------
+# Prometheus Instrumentation
+# -------------------------------------------------------------------------
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    should_group_untemplated=True,
+    excluded_handlers=['/metrics', '/docs', '/redoc', '/openapi.json'],
+).instrument(app).expose(app, endpoint='/metrics', include_in_schema=False)
+
+
+@app.middleware('http')
+async def request_context_middleware(
+    request: Request,
+    call_next,
+) -> JSONResponse:
+    """
+    Gera request_id e correlation_id para cada request HTTP.
+
+    O correlation_id pode ser propagado pelo cliente via header
+    X-Correlation-ID, ou sera gerado automaticamente.
+    O request_id e sempre gerado pelo servidor.
+    """
+    req_id = generate_id()
+    corr_id = request.headers.get('x-correlation-id') or generate_id()
+
+    # Setar context vars para propagacao automatica
+    req_token = request_id_var.set(req_id)
+    corr_token = correlation_id_var.set(corr_id)
+
+    # Extrair user_id do token JWT se presente
+    uid = _get_user_id_from_request(request)
+    uid_token = user_id_var.set(uid)
+
+    try:
+        response = await call_next(request)
+        # Incluir IDs nos headers de resposta para rastreamento
+        response.headers['X-Request-ID'] = req_id
+        response.headers['X-Correlation-ID'] = corr_id
+        return response
+    finally:
+        request_id_var.reset(req_token)
+        correlation_id_var.reset(corr_token)
+        user_id_var.reset(uid_token)
 
 
 @app.middleware('http')
@@ -281,6 +342,7 @@ from app.modules.projects.router import router as projects_router
 from app.modules.prompts.router import router as prompts_router
 from app.modules.settings.router import router as settings_router
 from app.modules.audit.router import router as audit_router
+from app.modules.alerts.router import router as alerts_router
 
 app.include_router(auth_router)
 app.include_router(dashboard_router)
@@ -291,6 +353,7 @@ app.include_router(executions_router)
 app.include_router(prompts_router)
 app.include_router(settings_router)
 app.include_router(audit_router)
+app.include_router(alerts_router)
 
 
 # -------------------------------------------------------------------------
@@ -300,7 +363,7 @@ app.include_router(audit_router)
 
 @app.get('/', tags=['Health'])
 async def health_check() -> dict[str, str]:
-    """Endpoint de health check da aplicacao."""
+    """Endpoint de health check simples da aplicacao."""
     return {
         'status': 'healthy',
         'service': 'AgentVision API',
@@ -309,10 +372,116 @@ async def health_check() -> dict[str, str]:
 
 
 @app.get('/api/health', tags=['Health'])
-async def api_health_check() -> dict[str, str]:
-    """Endpoint de health check da API."""
+async def api_health_check() -> dict:
+    """
+    Health check abrangente com status de cada componente.
+
+    Retorna status de PostgreSQL, Redis, MinIO e Celery.
+    Status geral: healthy (todos OK), degraded (algum falhou),
+    unhealthy (componente critico falhou).
+    """
+    import time
+
+    from app.shared.logging import get_logger as _get_logger
+
+    _health_logger = _get_logger('health_check')
+    components: dict[str, dict] = {}
+
+    # --- PostgreSQL ---
+    try:
+        start = time.monotonic()
+        db = SessionLocal()
+        try:
+            from sqlalchemy import text
+            result = db.execute(text('SELECT 1')).scalar()
+            latency = round((time.monotonic() - start) * 1000, 1)
+            components['postgresql'] = {
+                'status': 'healthy',
+                'latency_ms': latency,
+                'details': f'Query test OK (result={result})',
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        components['postgresql'] = {
+            'status': 'unhealthy',
+            'error': str(e)[:200],
+        }
+
+    # --- Redis ---
+    try:
+        start = time.monotonic()
+        from app.shared.redis_client import get_redis_client
+        redis_client = get_redis_client()
+        pong = redis_client.ping()
+        info = redis_client.info('memory')
+        latency = round((time.monotonic() - start) * 1000, 1)
+        components['redis'] = {
+            'status': 'healthy' if pong else 'unhealthy',
+            'latency_ms': latency,
+            'details': {
+                'used_memory_human': info.get('used_memory_human', 'N/A'),
+                'connected_clients': info.get('connected_clients', 'N/A'),
+            },
+        }
+    except Exception as e:
+        components['redis'] = {
+            'status': 'unhealthy',
+            'error': str(e)[:200],
+        }
+
+    # --- MinIO ---
+    try:
+        start = time.monotonic()
+        from app.shared.storage import StorageClient
+        storage = StorageClient()
+        storage._client.head_bucket(Bucket=storage._bucket)
+        latency = round((time.monotonic() - start) * 1000, 1)
+        components['minio'] = {
+            'status': 'healthy',
+            'latency_ms': latency,
+            'details': f'Bucket "{storage._bucket}" acessivel',
+        }
+    except Exception as e:
+        components['minio'] = {
+            'status': 'degraded',
+            'error': str(e)[:200],
+        }
+
+    # --- Celery Workers ---
+    try:
+        start = time.monotonic()
+        from app.celery_app import celery_app as _celery
+        inspector = _celery.control.inspect(timeout=3.0)
+        ping_result = inspector.ping() or {}
+        latency = round((time.monotonic() - start) * 1000, 1)
+        worker_count = len(ping_result)
+        components['celery'] = {
+            'status': 'healthy' if worker_count > 0 else 'degraded',
+            'latency_ms': latency,
+            'details': {
+                'workers_online': worker_count,
+                'worker_names': list(ping_result.keys()),
+            },
+        }
+    except Exception as e:
+        components['celery'] = {
+            'status': 'degraded',
+            'error': str(e)[:200],
+        }
+
+    # --- Status geral ---
+    statuses = [c['status'] for c in components.values()]
+    if all(s == 'healthy' for s in statuses):
+        overall = 'healthy'
+    elif any(s == 'unhealthy' for s in statuses):
+        overall = 'unhealthy'
+    else:
+        overall = 'degraded'
+
     return {
-        'status': 'healthy',
+        'status': overall,
         'service': 'AgentVision API',
         'version': '1.0.0',
+        'components': components,
     }

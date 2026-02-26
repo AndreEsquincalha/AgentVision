@@ -7,17 +7,30 @@ import {
   TrendingUp,
   AlertTriangle,
   Clock,
+  Cpu,
+  Coins,
+  Timer,
+  CircleDot,
 } from 'lucide-react';
 import {
   useDashboardSummary,
   useRecentExecutions,
   useUpcomingExecutions,
   useRecentFailures,
+  useOperationalMetrics,
 } from '@/hooks/useDashboard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDateTime, formatDuration, formatRelativeDate } from '@/utils/formatters';
-import type { DashboardSummary, Execution, UpcomingExecution, RecentFailure } from '@/types';
+import type {
+  DashboardSummary,
+  Execution,
+  UpcomingExecution,
+  RecentFailure,
+  ExecutionsPerHour,
+  DurationByJob,
+  CeleryWorkerStatus,
+} from '@/types';
 import { cn } from '@/lib/utils';
 
 // --- Tipos auxiliares ---
@@ -335,6 +348,253 @@ const FailureAlertsSection = memo(function FailureAlertsSection({
   );
 });
 
+/**
+ * Gráfico de barras de execuções por hora (últimas 24h).
+ */
+const ExecutionsPerHourChart = memo(function ExecutionsPerHourChart({
+  data,
+  loading,
+}: {
+  data: ExecutionsPerHour[];
+  loading: boolean;
+}) {
+  const maxTotal = useMemo(
+    () => Math.max(...data.map((d) => d.total), 1),
+    [data]
+  );
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E]">
+        <div className="border-b border-[#2E3348] px-6 py-4">
+          <h3 className="text-base font-semibold text-[#F9FAFB]">Execuções por Hora (24h)</h3>
+        </div>
+        <div className="flex items-end gap-1 px-6 py-6">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 flex-1" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E]">
+      <div className="border-b border-[#2E3348] px-6 py-4">
+        <div className="flex items-center gap-2">
+          <History className="size-4 text-[#22D3EE]" />
+          <h3 className="text-base font-semibold text-[#F9FAFB]">Execuções por Hora (24h)</h3>
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="px-6 py-8 text-center">
+          <History className="mx-auto mb-2 size-8 text-[#6B7280]" />
+          <p className="text-sm text-[#9CA3AF]">Sem dados de execuções nas últimas 24h</p>
+        </div>
+      ) : (
+        <div className="px-6 py-4">
+          <div className="flex items-end gap-[2px]" style={{ height: 120 }}>
+            {data.map((item) => {
+              const heightPct = (item.total / maxTotal) * 100;
+              const successPct = item.total > 0 ? (item.success / item.total) * 100 : 0;
+              const hour = item.hour ? new Date(item.hour).getHours().toString().padStart(2, '0') : '';
+              return (
+                <div
+                  key={item.hour}
+                  className="group relative flex flex-1 flex-col items-center"
+                  style={{ height: '100%' }}
+                >
+                  <div className="flex w-full flex-1 items-end justify-center">
+                    <div
+                      className="relative w-full max-w-[20px] overflow-hidden rounded-t"
+                      style={{ height: `${Math.max(heightPct, 2)}%` }}
+                    >
+                      <div
+                        className="absolute bottom-0 w-full bg-[#10B981]"
+                        style={{ height: `${successPct}%` }}
+                      />
+                      <div
+                        className="absolute top-0 w-full bg-[#EF4444]"
+                        style={{ height: `${100 - successPct}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="mt-1 text-[9px] text-[#6B7280]">{hour}h</span>
+                  {/* Tooltip */}
+                  <div className="pointer-events-none absolute -top-10 left-1/2 z-10 hidden -translate-x-1/2 rounded bg-[#242838] px-2 py-1 text-xs text-[#F9FAFB] shadow-lg group-hover:block">
+                    {item.total} ({item.success}ok/{item.failed}err)
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center gap-4 text-xs text-[#9CA3AF]">
+            <span className="flex items-center gap-1">
+              <span className="inline-block size-2.5 rounded-sm bg-[#10B981]" /> Sucesso
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block size-2.5 rounded-sm bg-[#EF4444]" /> Falha
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * Gráfico horizontal de duração média por job (top 10).
+ */
+const DurationByJobChart = memo(function DurationByJobChart({
+  data,
+  loading,
+}: {
+  data: DurationByJob[];
+  loading: boolean;
+}) {
+  const maxDuration = useMemo(
+    () => Math.max(...data.map((d) => d.avg_duration_seconds), 1),
+    [data]
+  );
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E]">
+        <div className="border-b border-[#2E3348] px-6 py-4">
+          <h3 className="text-base font-semibold text-[#F9FAFB]">Duração Média por Job</h3>
+        </div>
+        <div className="space-y-2 px-6 py-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E]">
+      <div className="border-b border-[#2E3348] px-6 py-4">
+        <div className="flex items-center gap-2">
+          <Timer className="size-4 text-[#8B5CF6]" />
+          <h3 className="text-base font-semibold text-[#F9FAFB]">Duração Média por Job (7d)</h3>
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="px-6 py-8 text-center">
+          <Timer className="mx-auto mb-2 size-8 text-[#6B7280]" />
+          <p className="text-sm text-[#9CA3AF]">Sem dados de duração</p>
+        </div>
+      ) : (
+        <div className="space-y-2 px-6 py-4">
+          {data.map((item) => {
+            const widthPct = (item.avg_duration_seconds / maxDuration) * 100;
+            return (
+              <div key={item.job_id} className="flex items-center gap-3">
+                <div className="w-28 min-w-0 shrink-0">
+                  <p className="truncate text-xs font-medium text-[#F9FAFB]">{item.job_name}</p>
+                </div>
+                <div className="flex-1">
+                  <div className="h-5 w-full rounded bg-[#242838]">
+                    <div
+                      className="flex h-full items-center rounded bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] px-2"
+                      style={{ width: `${Math.max(widthPct, 3)}%` }}
+                    >
+                      <span className="whitespace-nowrap text-[10px] font-medium text-white">
+                        {formatDuration(Math.round(item.avg_duration_seconds))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span className="shrink-0 text-[10px] text-[#6B7280]">
+                  {item.execution_count}x
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * Status dos workers Celery.
+ */
+const WorkersStatusSection = memo(function WorkersStatusSection({
+  workers,
+  loading,
+}: {
+  workers: CeleryWorkerStatus[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E]">
+        <div className="border-b border-[#2E3348] px-6 py-4">
+          <h3 className="text-base font-semibold text-[#F9FAFB]">Workers Celery</h3>
+        </div>
+        <div className="space-y-2 px-6 py-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[#2E3348] bg-[#1A1D2E]">
+      <div className="border-b border-[#2E3348] px-6 py-4">
+        <div className="flex items-center gap-2">
+          <Cpu className="size-4 text-[#10B981]" />
+          <h3 className="text-base font-semibold text-[#F9FAFB]">Workers Celery</h3>
+        </div>
+      </div>
+
+      {workers.length === 0 ? (
+        <div className="px-6 py-6 text-center">
+          <Cpu className="mx-auto mb-2 size-8 text-[#6B7280]" />
+          <p className="text-sm text-[#9CA3AF]">Nenhum worker detectado</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-[#2E3348]">
+          {workers.map((worker) => (
+            <div key={worker.name} className="flex items-center gap-3 px-6 py-3">
+              <CircleDot
+                className={cn(
+                  'size-3.5',
+                  worker.status === 'online' ? 'text-[#10B981]' : 'text-[#EF4444]'
+                )}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-[#F9FAFB]">{worker.name}</p>
+              </div>
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-xs font-medium',
+                  worker.status === 'online'
+                    ? 'bg-[#10B981]/10 text-[#10B981]'
+                    : 'bg-[#EF4444]/10 text-[#EF4444]'
+                )}
+              >
+                {worker.status === 'online' ? 'Online' : 'Offline'}
+              </span>
+              {worker.active_tasks > 0 && (
+                <span className="text-xs text-[#9CA3AF]">
+                  {worker.active_tasks} task{worker.active_tasks !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 // --- Componente principal ---
 
 /**
@@ -347,6 +607,7 @@ export default function Dashboard() {
   const { data: recentExecutions, isPending: executionsLoading } = useRecentExecutions();
   const { data: upcomingExecutions, isPending: upcomingLoading } = useUpcomingExecutions();
   const { data: recentFailures, isPending: failuresLoading } = useRecentFailures();
+  const { data: opMetrics, isPending: opMetricsLoading } = useOperationalMetrics();
 
   // Dados de métricas com fallback para zero
   const summaryData = useMemo<DashboardSummary>(
@@ -382,16 +643,65 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Seções de dados */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* Últimas execuções (coluna esquerda, ocupa mais espaço) */}
-        <RecentExecutionsSection
-          executions={recentExecutions ?? []}
-          loading={executionsLoading}
+      {/* Cards operacionais extras */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <MetricCard
+          label="Tokens Hoje"
+          value={opMetrics?.total_tokens_today ?? 0}
+          icon={Coins}
+          iconBgColor="bg-[#F59E0B]/10"
+          iconColor="text-[#F59E0B]"
+          loading={opMetricsLoading}
+          formatValue={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
         />
+        <MetricCard
+          label="Duração Média Hoje"
+          value={opMetrics?.avg_duration_today ?? 0}
+          icon={Timer}
+          iconBgColor="bg-[#8B5CF6]/10"
+          iconColor="text-[#8B5CF6]"
+          loading={opMetricsLoading}
+          formatValue={(v: number) => formatDuration(Math.round(v))}
+        />
+        <MetricCard
+          label="Workers Online"
+          value={opMetrics?.workers?.filter((w) => w.status === 'online').length ?? 0}
+          icon={Cpu}
+          iconBgColor="bg-[#10B981]/10"
+          iconColor="text-[#10B981]"
+          loading={opMetricsLoading}
+        />
+      </div>
 
-        {/* Coluna direita: próximas execuções + falhas */}
+      {/* Gráficos operacionais */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <ExecutionsPerHourChart
+          data={opMetrics?.executions_per_hour ?? []}
+          loading={opMetricsLoading}
+        />
+        <DurationByJobChart
+          data={opMetrics?.duration_by_job ?? []}
+          loading={opMetricsLoading}
+        />
+      </div>
+
+      {/* Seções de dados */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        {/* Últimas execuções */}
+        <div className="xl:col-span-2">
+          <RecentExecutionsSection
+            executions={recentExecutions ?? []}
+            loading={executionsLoading}
+          />
+        </div>
+
+        {/* Coluna direita: workers + próximas + falhas */}
         <div className="space-y-6">
+          <WorkersStatusSection
+            workers={opMetrics?.workers ?? []}
+            loading={opMetricsLoading}
+          />
+
           <UpcomingExecutionsSection
             executions={upcomingExecutions ?? []}
             loading={upcomingLoading}

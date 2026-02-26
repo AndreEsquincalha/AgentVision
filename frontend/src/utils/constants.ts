@@ -41,6 +41,7 @@ export const API_ENDPOINTS = {
     RECENT_EXECUTIONS: '/api/dashboard/recent-executions',
     UPCOMING_EXECUTIONS: '/api/dashboard/upcoming-executions',
     RECENT_FAILURES: '/api/dashboard/recent-failures',
+    OPERATIONAL_METRICS: '/api/dashboard/operational-metrics',
   },
 
   // Projetos

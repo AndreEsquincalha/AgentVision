@@ -5,6 +5,7 @@ import type {
   Execution,
   UpcomingExecution,
   RecentFailure,
+  OperationalMetrics,
 } from '@/types';
 
 // --- Query keys ---
@@ -15,6 +16,7 @@ const DASHBOARD_KEYS = {
   recentExecutions: () => [...DASHBOARD_KEYS.all, 'recent-executions'] as const,
   upcomingExecutions: () => [...DASHBOARD_KEYS.all, 'upcoming-executions'] as const,
   recentFailures: () => [...DASHBOARD_KEYS.all, 'recent-failures'] as const,
+  operationalMetrics: () => [...DASHBOARD_KEYS.all, 'operational-metrics'] as const,
 };
 
 // --- Configurações de tempo ---
@@ -72,6 +74,19 @@ export function useRecentFailures() {
   return useQuery<RecentFailure[]>({
     queryKey: DASHBOARD_KEYS.recentFailures(),
     queryFn: dashboardService.getRecentFailures,
+    staleTime: STALE_TIME,
+    refetchInterval: REFETCH_INTERVAL,
+  });
+}
+
+/**
+ * Hook para buscar métricas operacionais (execuções/hora, duração/job, workers).
+ * Auto-refresh a cada 30 segundos.
+ */
+export function useOperationalMetrics() {
+  return useQuery<OperationalMetrics>({
+    queryKey: DASHBOARD_KEYS.operationalMetrics(),
+    queryFn: dashboardService.getOperationalMetrics,
     staleTime: STALE_TIME,
     refetchInterval: REFETCH_INTERVAL,
   });

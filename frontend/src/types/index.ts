@@ -290,3 +290,33 @@ export interface RecentFailure {
   error_summary: string;
   failed_at: string;
 }
+
+// --- Tipos de metricas operacionais ---
+
+export interface ExecutionsPerHour {
+  hour: string;
+  total: number;
+  success: number;
+  failed: number;
+}
+
+export interface DurationByJob {
+  job_id: string;
+  job_name: string;
+  avg_duration_seconds: number;
+  execution_count: number;
+}
+
+export interface CeleryWorkerStatus {
+  name: string;
+  status: 'online' | 'offline';
+  active_tasks: number;
+}
+
+export interface OperationalMetrics {
+  executions_per_hour: ExecutionsPerHour[];
+  duration_by_job: DurationByJob[];
+  workers: CeleryWorkerStatus[];
+  total_tokens_today: number;
+  avg_duration_today: number;
+}

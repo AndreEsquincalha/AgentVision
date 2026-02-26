@@ -10,6 +10,7 @@ from app.modules.dashboard.schemas import (
     DashboardSummaryResponse,
     LLMProviderHealthListResponse,
     LLMProviderHealthResponse,
+    OperationalMetricsResponse,
     RecentExecutionResponse,
     RecentFailureResponse,
     TokenUsageResponse,
@@ -128,6 +129,22 @@ def get_token_usage(
         date_to=date_to,
         provider=provider,
     )
+
+
+@router.get('/operational-metrics', response_model=OperationalMetricsResponse)
+def get_operational_metrics(
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
+    service: DashboardService = Depends(get_dashboard_service),
+) -> OperationalMetricsResponse:
+    """
+    Retorna metricas operacionais para o dashboard avancado.
+
+    Inclui execucoes por hora (24h), duracao media por job (top 10),
+    status dos workers Celery e tokens do dia.
+
+    Requer autenticacao via access token.
+    """
+    return service.get_operational_metrics()
 
 
 @router.get('/llm-providers-health', response_model=LLMProviderHealthListResponse)

@@ -67,6 +67,13 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(',')]
 
     # -------------------------------------------------------------------------
+    # Logging
+    # -------------------------------------------------------------------------
+    log_level: str = 'INFO'
+    log_format: str = 'json'  # json ou console
+    log_levels: str = ''  # Per-module overrides: "app.modules.agents:DEBUG,app.modules.jobs:INFO"
+
+    # -------------------------------------------------------------------------
     # Admin Seed
     # -------------------------------------------------------------------------
     admin_email: str = 'admin@agentvision.com'
