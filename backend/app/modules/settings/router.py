@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.settings.repository import SettingRepository
 from app.modules.settings.schemas import (
@@ -49,7 +49,7 @@ def get_setting_service(
 @router.post('/smtp/test', response_model=MessageResponse)
 def test_smtp_connection(
     config: SMTPConfigSchema,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin')),
     service: SettingService = Depends(get_setting_service),
 ) -> MessageResponse:
     """
@@ -75,7 +75,7 @@ def test_smtp_connection(
 @router.get('/{category}', response_model=SettingsGroupResponse)
 def get_settings_by_category(
     category: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin')),
     service: SettingService = Depends(get_setting_service),
 ) -> SettingsGroupResponse:
     """
@@ -90,7 +90,7 @@ def get_settings_by_category(
 def update_settings_by_category(
     category: str,
     data: SettingsBulkUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin')),
     service: SettingService = Depends(get_setting_service),
 ) -> SettingsGroupResponse:
     """

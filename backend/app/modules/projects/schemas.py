@@ -5,6 +5,13 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.shared.schemas import PaginatedResponse
+from app.shared.security import (
+    sanitize_name,
+    sanitize_string_dict,
+    sanitize_string_list,
+    sanitize_text,
+    validate_json_size,
+)
 
 
 class ProjectCreate(BaseModel):
@@ -59,6 +66,7 @@ class ProjectCreate(BaseModel):
     @classmethod
     def validate_base_url(cls, v: str) -> str:
         """Valida que a URL base tem formato valido."""
+        v = sanitize_text(v)
         parsed = urlparse(v)
         if not parsed.scheme or not parsed.netloc:
             raise ValueError(
@@ -74,7 +82,34 @@ class ProjectCreate(BaseModel):
         """Valida que o nome nao esta vazio."""
         if not v or not v.strip():
             raise ValueError('O nome do projeto nao pode estar vazio')
-        return v.strip()
+        return sanitize_name(v)
+
+    @field_validator('description')
+    @classmethod
+    def description_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza descricao (se fornecida)."""
+        if v is None:
+            return v
+        return sanitize_text(v)
+
+    @field_validator('credentials')
+    @classmethod
+    def credentials_sanitized(cls, v: dict | None) -> dict | None:
+        """Sanitiza credenciais (se fornecidas)."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'credentials')
+
+    @field_validator('allowed_domains')
+    @classmethod
+    def allowed_domains_sanitized(cls, v: list[str] | None) -> list[str] | None:
+        """Sanitiza lista de dominios permitidos."""
+        return sanitize_string_list(v)
+
+    @field_validator('blocked_urls')
+    @classmethod
+    def blocked_urls_sanitized(cls, v: list[str] | None) -> list[str] | None:
+        """Sanitiza lista de URLs bloqueadas."""
+        return sanitize_string_list(v)
 
     @field_validator('llm_provider')
     @classmethod
@@ -117,6 +152,7 @@ class ProjectUpdate(BaseModel):
         """Valida que a URL base tem formato valido (se fornecida)."""
         if v is None:
             return v
+        v = sanitize_text(v)
         parsed = urlparse(v)
         if not parsed.scheme or not parsed.netloc:
             raise ValueError(
@@ -132,7 +168,34 @@ class ProjectUpdate(BaseModel):
         """Valida que o nome nao esta vazio (se fornecido)."""
         if v is not None and not v.strip():
             raise ValueError('O nome do projeto nao pode estar vazio')
-        return v.strip() if v is not None else v
+        return sanitize_name(v) if v is not None else v
+
+    @field_validator('description')
+    @classmethod
+    def description_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza descricao (se fornecida)."""
+        if v is None:
+            return v
+        return sanitize_text(v)
+
+    @field_validator('credentials')
+    @classmethod
+    def credentials_sanitized(cls, v: dict | None) -> dict | None:
+        """Sanitiza credenciais (se fornecidas)."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'credentials')
+
+    @field_validator('allowed_domains')
+    @classmethod
+    def allowed_domains_sanitized(cls, v: list[str] | None) -> list[str] | None:
+        """Sanitiza lista de dominios permitidos."""
+        return sanitize_string_list(v)
+
+    @field_validator('blocked_urls')
+    @classmethod
+    def blocked_urls_sanitized(cls, v: list[str] | None) -> list[str] | None:
+        """Sanitiza lista de URLs bloqueadas."""
+        return sanitize_string_list(v)
 
     @field_validator('llm_provider')
     @classmethod

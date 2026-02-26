@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_storage_client
+from app.dependencies import get_storage_client, require_roles
 from app.modules.auth.models import User
 from app.modules.delivery.repository import DeliveryRepository
 from app.modules.delivery.schemas import DeliveryLogResponse
@@ -75,7 +75,7 @@ def list_executions(
     date_from: datetime | None = Query(None, description='Data/hora inicial'),
     date_to: datetime | None = Query(None, description='Data/hora final'),
     is_dry_run: bool | None = Query(None, description='Filtrar por dry run'),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> ExecutionListResponse:
     """
@@ -103,7 +103,7 @@ def list_executions(
 @router.post('/{execution_id}/cancel', response_model=ExecutionResponse)
 def cancel_execution(
     execution_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> ExecutionResponse:
     """
@@ -119,7 +119,7 @@ def cancel_execution(
 @router.get('/{execution_id}', response_model=ExecutionDetailResponse)
 def get_execution(
     execution_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> ExecutionDetailResponse:
     """
@@ -133,7 +133,7 @@ def get_execution(
 @router.delete('/{execution_id}', response_model=MessageResponse)
 def delete_execution(
     execution_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> MessageResponse:
     """
@@ -152,7 +152,7 @@ def delete_execution(
 @router.get('/{execution_id}/screenshots', response_model=ScreenshotUrlResponse)
 def get_screenshots(
     execution_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> ScreenshotUrlResponse:
     """
@@ -167,7 +167,7 @@ def get_screenshots(
 @router.get('/{execution_id}/pdf', response_model=PdfUrlResponse)
 def get_pdf(
     execution_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> PdfUrlResponse:
     """
@@ -186,7 +186,7 @@ def get_pdf(
 def retry_delivery(
     execution_id: uuid.UUID,
     delivery_log_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ExecutionService = Depends(get_execution_service),
 ) -> DeliveryLogResponse:
     """

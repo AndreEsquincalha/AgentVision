@@ -3,6 +3,7 @@ import smtplib
 
 from app.modules.settings.repository import SettingRepository
 from app.modules.settings.schemas import SMTPConfigSchema, SettingsGroupResponse
+from app.shared.security import mask_sensitive_dict
 from app.shared.utils import decrypt_value, encrypt_value
 
 logger = logging.getLogger(__name__)
@@ -54,9 +55,12 @@ class SettingService:
                 )
                 decrypted_settings[setting.key] = ''
 
+        # Mascara campos sensiveis antes de retornar
+        masked = mask_sensitive_dict(decrypted_settings) or {}
+
         return SettingsGroupResponse(
             category=category,
-            settings=decrypted_settings,
+            settings=masked,
         )
 
     def update_settings(self, category: str, data: dict[str, str]) -> SettingsGroupResponse:
@@ -72,6 +76,9 @@ class SettingService:
         """
         # Obtem descricoes padrao para chaves conhecidas
         for key, value in data.items():
+            if value == '****':
+                # Mantem valor existente quando o frontend envia mascara
+                continue
             encrypted = encrypt_value(value)
             description = SMTP_KEY_DESCRIPTIONS.get(key) if category == 'smtp' else None
             self._repository.upsert(

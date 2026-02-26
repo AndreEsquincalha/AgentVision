@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.shared.security import sanitize_text
+
 
 class SettingCreate(BaseModel):
     """Schema para criacao de uma configuracao."""
@@ -26,6 +28,32 @@ class SettingCreate(BaseModel):
         description='Descricao da configuracao',
     )
 
+    @field_validator('key')
+    @classmethod
+    def key_sanitized(cls, v: str) -> str:
+        """Sanitiza chave."""
+        return sanitize_text(v)
+
+    @field_validator('value')
+    @classmethod
+    def value_sanitized(cls, v: str) -> str:
+        """Sanitiza valor."""
+        return sanitize_text(v)
+
+    @field_validator('category')
+    @classmethod
+    def category_sanitized(cls, v: str) -> str:
+        """Sanitiza categoria."""
+        return sanitize_text(v)
+
+    @field_validator('description')
+    @classmethod
+    def description_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza descricao."""
+        if v is None:
+            return v
+        return sanitize_text(v)
+
 
 class SettingUpdate(BaseModel):
     """Schema para atualizacao do valor de uma configuracao."""
@@ -35,6 +63,12 @@ class SettingUpdate(BaseModel):
         min_length=1,
         description='Novo valor da configuracao (sera criptografado)',
     )
+
+    @field_validator('value')
+    @classmethod
+    def value_sanitized(cls, v: str) -> str:
+        """Sanitiza valor."""
+        return sanitize_text(v)
 
 
 class SettingResponse(BaseModel):
@@ -83,7 +117,10 @@ class SettingsBulkUpdate(BaseModel):
         """Valida que o dicionario de configuracoes nao esta vazio."""
         if not v:
             raise ValueError('O dicionario de configuracoes nao pode estar vazio')
-        return v
+        cleaned: dict[str, str] = {}
+        for key, value in v.items():
+            cleaned[sanitize_text(key)] = sanitize_text(value)
+        return cleaned
 
 
 class SMTPConfigSchema(BaseModel):
@@ -121,3 +158,9 @@ class SMTPConfigSchema(BaseModel):
         min_length=1,
         description='Endereco de email do remetente',
     )
+
+    @field_validator('host', 'username', 'password', 'sender_email')
+    @classmethod
+    def smtp_fields_sanitized(cls, v: str) -> str:
+        """Sanitiza campos SMTP."""
+        return sanitize_text(v)

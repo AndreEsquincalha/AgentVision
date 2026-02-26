@@ -7,6 +7,15 @@ from croniter import croniter
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.shared.schemas import PaginatedResponse
+from app.shared.security import (
+    mask_sensitive_dict,
+    sanitize_email_recipient,
+    sanitize_name,
+    sanitize_string_dict,
+    sanitize_text,
+    validate_json_size,
+)
+from app.shared.utils import decrypt_dict
 
 
 class JobPriority(str, Enum):
@@ -48,6 +57,22 @@ class DeliveryConfigInline(BaseModel):
                 f'Tipo de canal invalido. Valores permitidos: {", ".join(allowed_types)}'
             )
         return v.lower()
+
+    @field_validator('recipients')
+    @classmethod
+    def sanitize_recipients(cls, v: list[str]) -> list[str]:
+        """Remove CR/LF e espacos dos destinatarios."""
+        cleaned = [sanitize_email_recipient(r) for r in v if r and r.strip()]
+        if not cleaned:
+            raise ValueError('A lista de destinatarios nao pode estar vazia')
+        return cleaned
+
+    @field_validator('channel_config')
+    @classmethod
+    def sanitize_channel_config(cls, v: dict | None) -> dict | None:
+        """Sanitiza configuracoes do canal."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'channel_config')
 
 
 class JobCreate(BaseModel):
@@ -101,7 +126,7 @@ class JobCreate(BaseModel):
         """Valida que o nome nao esta vazio."""
         if not v or not v.strip():
             raise ValueError('O nome do job nao pode estar vazio')
-        return v.strip()
+        return sanitize_name(v)
 
     @field_validator('cron_expression')
     @classmethod
@@ -112,7 +137,7 @@ class JobCreate(BaseModel):
                 'Expressao cron invalida. Use formato padrao '
                 '(ex: "0 8 * * *" para todo dia as 8h)'
             )
-        return v.strip()
+        return sanitize_text(v)
 
     @field_validator('agent_prompt')
     @classmethod
@@ -120,7 +145,14 @@ class JobCreate(BaseModel):
         """Valida que o prompt do agente nao esta vazio."""
         if not v or not v.strip():
             raise ValueError('O prompt do agente nao pode estar vazio')
-        return v.strip()
+        return sanitize_text(v)
+
+    @field_validator('execution_params')
+    @classmethod
+    def validate_execution_params_size(cls, v: dict | None) -> dict | None:
+        """Valida tamanho maximo do JSON de parametros."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'execution_params')
 
 
 class JobUpdate(BaseModel):
@@ -147,7 +179,7 @@ class JobUpdate(BaseModel):
         """Valida que o nome nao esta vazio (se fornecido)."""
         if v is not None and not v.strip():
             raise ValueError('O nome do job nao pode estar vazio')
-        return v.strip() if v is not None else v
+        return sanitize_name(v) if v is not None else v
 
     @field_validator('cron_expression')
     @classmethod
@@ -160,7 +192,7 @@ class JobUpdate(BaseModel):
                 'Expressao cron invalida. Use formato padrao '
                 '(ex: "0 8 * * *" para todo dia as 8h)'
             )
-        return v.strip()
+        return sanitize_text(v)
 
     @field_validator('agent_prompt')
     @classmethod
@@ -168,7 +200,14 @@ class JobUpdate(BaseModel):
         """Valida que o prompt do agente nao esta vazio (se fornecido)."""
         if v is not None and not v.strip():
             raise ValueError('O prompt do agente nao pode estar vazio')
-        return v.strip() if v is not None else v
+        return sanitize_text(v) if v is not None else v
+
+    @field_validator('execution_params')
+    @classmethod
+    def validate_execution_params_size(cls, v: dict | None) -> dict | None:
+        """Valida tamanho maximo do JSON de parametros."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'execution_params')
 
 
 class JobToggle(BaseModel):
@@ -230,11 +269,28 @@ class JobResponse(BaseModel):
         # Converte delivery_configs do modelo para schemas de resposta
         delivery_config_responses = []
         if hasattr(job, 'delivery_configs') and job.delivery_configs:
-            delivery_config_responses = [
-                DeliveryConfigResponse.model_validate(dc)
-                for dc in job.delivery_configs
-                if dc.deleted_at is None
-            ]
+            for dc in job.delivery_configs:
+                if dc.deleted_at is not None:
+                    continue
+                decrypted = None
+                if dc.channel_config:
+                    try:
+                        decrypted = decrypt_dict(dc.channel_config)
+                    except Exception:
+                        decrypted = None
+                masked = mask_sensitive_dict(decrypted) if decrypted else None
+                delivery_config_responses.append(
+                    DeliveryConfigResponse(
+                        id=dc.id,
+                        job_id=dc.job_id,
+                        channel_type=dc.channel_type,
+                        recipients=dc.recipients,
+                        channel_config=masked,
+                        is_active=dc.is_active,
+                        created_at=dc.created_at,
+                        updated_at=dc.updated_at,
+                    )
+                )
 
         # Acessa campos com seguranca (podem nao existir em migracoes pendentes)
         priority: str = getattr(job, 'priority', 'normal') or 'normal'

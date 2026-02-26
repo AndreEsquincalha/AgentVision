@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.delivery.repository import DeliveryRepository
 from app.modules.jobs.repository import JobRepository
@@ -67,7 +67,7 @@ def list_jobs(
     project_id: uuid.UUID | None = Query(None, description='Filtrar por projeto'),
     is_active: bool | None = Query(None, description='Filtrar por status ativo/inativo'),
     search: str | None = Query(None, description='Busca por nome'),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> JobListResponse:
     """
@@ -88,7 +88,7 @@ def list_jobs(
 @router.get('/{job_id}', response_model=JobResponse)
 def get_job(
     job_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> JobResponse:
     """
@@ -102,7 +102,7 @@ def get_job(
 @router.post('', response_model=JobResponse, status_code=201)
 def create_job(
     data: JobCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> JobResponse:
     """
@@ -118,7 +118,7 @@ def create_job(
 def update_job(
     job_id: uuid.UUID,
     data: JobUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> JobResponse:
     """
@@ -132,7 +132,7 @@ def update_job(
 @router.delete('/{job_id}', response_model=MessageResponse)
 def delete_job(
     job_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> MessageResponse:
     """
@@ -151,7 +151,7 @@ def delete_job(
 def toggle_job(
     job_id: uuid.UUID,
     data: JobToggle,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> JobResponse:
     """
@@ -165,7 +165,7 @@ def toggle_job(
 @router.post('/{job_id}/dry-run', response_model=DryRunResponse, status_code=202)
 def trigger_dry_run(
     job_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: JobService = Depends(get_job_service),
 ) -> DryRunResponse:
     """

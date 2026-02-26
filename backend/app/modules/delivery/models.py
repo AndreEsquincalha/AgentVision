@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, Boolean
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.models import BaseModel, SoftDeleteModel
@@ -42,8 +42,8 @@ class DeliveryConfig(SoftDeleteModel):
         nullable=True,
         default=None,
     )
-    channel_config: Mapped[dict | None] = mapped_column(
-        JSON,
+    channel_config: Mapped[str | None] = mapped_column(
+        Text,
         nullable=True,
         default=None,
     )

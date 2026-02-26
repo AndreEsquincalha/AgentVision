@@ -1,7 +1,17 @@
-from sqlalchemy import Boolean, String
-from sqlalchemy.orm import Mapped, mapped_column
+from datetime import datetime
+from enum import Enum
 
-from app.shared.models import SoftDeleteModel
+from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
+from app.shared.models import BaseModel, SoftDeleteModel
+
+
+class UserRole(str, Enum):
+    """Roles basicos do sistema."""
+
+    admin = 'admin'
+    operator = 'operator'
+    viewer = 'viewer'
 
 
 class User(SoftDeleteModel):
@@ -32,4 +42,31 @@ class User(SoftDeleteModel):
         Boolean,
         default=True,
         nullable=False,
+    )
+    role: Mapped[str] = mapped_column(
+        String(20),
+        default=UserRole.admin.value,
+        nullable=False,
+    )
+
+
+class TokenBlacklist(BaseModel):
+    """
+    Tokens JWT revogados (logout).
+
+    Armazena o JTI do token e a data de expiracao para cleanup.
+    """
+
+    __tablename__ = 'token_blacklist'
+
+    jti: Mapped[str] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
     )

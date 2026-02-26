@@ -9,7 +9,8 @@ from app.database import Base
 
 # Importar todos os modelos para que o Alembic detecte as tabelas.
 # Adicione os imports de novos modelos conforme forem criados.
-from app.modules.auth.models import User  # noqa: F401
+from app.modules.auth.models import TokenBlacklist, User  # noqa: F401
+from app.modules.audit.models import AuditLog  # noqa: F401
 from app.modules.projects.models import Project  # noqa: F401
 from app.modules.jobs.models import Job  # noqa: F401
 from app.modules.executions.models import Execution  # noqa: F401

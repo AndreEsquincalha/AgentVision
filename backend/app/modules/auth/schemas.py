@@ -1,7 +1,10 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.modules.auth.models import UserRole
+from app.shared.security import sanitize_text, validate_password_strength
 
 
 class LoginRequest(BaseModel):
@@ -9,6 +12,12 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str
+
+    @field_validator('email')
+    @classmethod
+    def email_normalized(cls, v: EmailStr) -> str:
+        """Normaliza o email."""
+        return sanitize_text(str(v)).lower()
 
     @field_validator('password')
     @classmethod
@@ -42,6 +51,7 @@ class UserResponse(BaseModel):
     email: str
     name: str
     is_active: bool
+    role: str
     created_at: datetime
 
 
@@ -51,14 +61,16 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
+    role: UserRole = Field(
+        default=UserRole.admin,
+        description='Role do usuario (admin, operator, viewer)',
+    )
 
     @field_validator('password')
     @classmethod
-    def password_min_length(cls, v: str) -> str:
-        """Valida que a senha tem pelo menos 6 caracteres."""
-        if len(v) < 6:
-            raise ValueError('A senha deve ter pelo menos 6 caracteres')
-        return v
+    def password_strength(cls, v: str) -> str:
+        """Valida requisitos de senha forte."""
+        return validate_password_strength(v)
 
     @field_validator('name')
     @classmethod
@@ -66,4 +78,38 @@ class UserCreate(BaseModel):
         """Valida que o nome nao esta vazio."""
         if not v or not v.strip():
             raise ValueError('O nome nao pode estar vazio')
-        return v.strip()
+        return sanitize_text(v)
+
+
+class PasswordChange(BaseModel):
+    """Schema para troca de senha."""
+
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=1)
+
+    @field_validator('new_password')
+    @classmethod
+    def new_password_strength(cls, v: str) -> str:
+        """Valida requisitos de senha forte."""
+        return validate_password_strength(v)
+
+
+class LogoutRequest(BaseModel):
+    """Schema de logout opcional."""
+
+    refresh_token: str | None = Field(
+        None,
+        description='Refresh token para revogacao opcional',
+    )
+
+
+class UnlockAccountRequest(BaseModel):
+    """Schema para desbloqueio manual de conta."""
+
+    email: EmailStr
+
+    @field_validator('email')
+    @classmethod
+    def unlock_email_normalized(cls, v: EmailStr) -> str:
+        """Normaliza o email."""
+        return sanitize_text(str(v)).lower()

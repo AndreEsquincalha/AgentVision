@@ -18,7 +18,7 @@ from app.modules.jobs.schemas import (
 from app.modules.projects.repository import ProjectRepository
 from app.shared.exceptions import BadRequestException, NotFoundException
 from app.shared.schemas import PaginatedResponse
-from app.shared.utils import utc_now
+from app.shared.utils import encrypt_dict, utc_now
 
 
 class JobService:
@@ -319,11 +319,14 @@ class JobService:
             configs: Lista de configuracoes de entrega inline.
         """
         for config in configs:
+            encrypted_config = (
+                encrypt_dict(config.channel_config) if config.channel_config else None
+            )
             config_data: dict = {
                 'job_id': job_id,
                 'channel_type': config.channel_type,
                 'recipients': config.recipients,
-                'channel_config': config.channel_config,
+                'channel_config': encrypted_config,
                 'is_active': config.is_active,
             }
             self._delivery_repository.create_config(config_data)

@@ -4,7 +4,7 @@ import uuid
 from app.config import settings
 from app.modules.delivery.base_channel import DeliveryChannel, DeliveryResult
 from app.modules.delivery.email_channel import EmailChannel
-from app.modules.delivery.models import DeliveryConfig, DeliveryLog
+from app.modules.delivery.models import DeliveryConfig
 from app.modules.delivery.repository import DeliveryRepository
 from app.modules.delivery.schemas import (
     DeliveryConfigCreate,
@@ -13,7 +13,8 @@ from app.modules.delivery.schemas import (
     DeliveryLogResponse,
 )
 from app.shared.exceptions import BadRequestException, NotFoundException
-from app.shared.utils import utc_now
+from app.shared.security import mask_sensitive_dict
+from app.shared.utils import decrypt_dict, encrypt_dict, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +46,7 @@ class DeliveryService:
             Lista de configuracoes de entrega.
         """
         configs = self._repository.get_configs_by_job(job_id)
-        return [
-            DeliveryConfigResponse.model_validate(config)
-            for config in configs
-        ]
+        return [self._to_response(config) for config in configs]
 
     def get_config(self, config_id: uuid.UUID) -> DeliveryConfigResponse:
         """
@@ -66,7 +64,7 @@ class DeliveryService:
         config = self._repository.get_config_by_id(config_id)
         if not config:
             raise NotFoundException('Configuracao de entrega nao encontrada')
-        return DeliveryConfigResponse.model_validate(config)
+        return self._to_response(config)
 
     def create_config(self, data: DeliveryConfigCreate) -> DeliveryConfigResponse:
         """
@@ -78,15 +76,18 @@ class DeliveryService:
         Returns:
             Dados da configuracao criada.
         """
+        encrypted_config = (
+            encrypt_dict(data.channel_config) if data.channel_config else None
+        )
         config_data: dict = {
             'job_id': data.job_id,
             'channel_type': data.channel_type,
             'recipients': data.recipients,
-            'channel_config': data.channel_config,
+            'channel_config': encrypted_config,
             'is_active': data.is_active,
         }
         config = self._repository.create_config(config_data)
-        return DeliveryConfigResponse.model_validate(config)
+        return self._to_response(config)
 
     def update_config(
         self,
@@ -113,13 +114,13 @@ class DeliveryService:
         update_data = self._prepare_config_update_data(data)
 
         if not update_data:
-            return DeliveryConfigResponse.model_validate(existing)
+            return self._to_response(existing)
 
         config = self._repository.update_config(config_id, update_data)
         if not config:
             raise NotFoundException('Configuracao de entrega nao encontrada')
 
-        return DeliveryConfigResponse.model_validate(config)
+        return self._to_response(config)
 
     def delete_config(self, config_id: uuid.UUID) -> None:
         """
@@ -178,13 +179,14 @@ class DeliveryService:
 
             try:
                 # Instancia o canal correto via Factory
-                channel = self._create_channel(config.channel_type, config.channel_config)
+                decrypted_config = self._decrypt_channel_config(config.channel_config)
+                channel = self._create_channel(config.channel_type, decrypted_config)
 
                 # Executa a entrega
                 result: DeliveryResult = channel.send(
                     recipients=config.recipients or [],
                     pdf_path=pdf_path,
-                    config=config.channel_config,
+                    config=decrypted_config,
                     execution_data=execution_data,
                 )
 
@@ -253,11 +255,12 @@ class DeliveryService:
 
         try:
             # Instancia o canal e tenta novamente
-            channel = self._create_channel(config.channel_type, config.channel_config)
+            decrypted_config = self._decrypt_channel_config(config.channel_config)
+            channel = self._create_channel(config.channel_type, decrypted_config)
             result: DeliveryResult = channel.send(
                 recipients=config.recipients or [],
                 pdf_path=None,  # PDF pode nao estar mais disponivel localmente
-                config=config.channel_config,
+                config=decrypted_config,
             )
 
             if result.success:
@@ -426,6 +429,38 @@ class DeliveryService:
         for field in fields:
             value = getattr(data, field)
             if value is not None:
-                update_data[field] = value
+                if field == 'channel_config':
+                    update_data[field] = encrypt_dict(value)
+                else:
+                    update_data[field] = value
 
         return update_data
+
+    def _decrypt_channel_config(self, encrypted_value: str | None) -> dict | None:
+        """
+        Descriptografa channel_config (se houver).
+        """
+        if not encrypted_value:
+            return None
+        try:
+            return decrypt_dict(encrypted_value)
+        except Exception:
+            logger.warning('Nao foi possivel descriptografar channel_config')
+            return None
+
+    def _to_response(self, config: DeliveryConfig) -> DeliveryConfigResponse:
+        """
+        Converte modelo para resposta mascarando dados sensiveis.
+        """
+        decrypted = self._decrypt_channel_config(config.channel_config)
+        masked = mask_sensitive_dict(decrypted) if decrypted else None
+        return DeliveryConfigResponse(
+            id=config.id,
+            job_id=config.job_id,
+            channel_type=config.channel_type,
+            recipients=config.recipients,
+            channel_config=masked,
+            is_active=config.is_active,
+            created_at=config.created_at,
+            updated_at=config.updated_at,
+        )

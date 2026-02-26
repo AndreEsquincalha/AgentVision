@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     # Criptografia (Fernet)
     # -------------------------------------------------------------------------
     encryption_key: str = 'change-me-to-a-valid-fernet-key'
+    encryption_keys: str = ''
 
     # -------------------------------------------------------------------------
     # CORS

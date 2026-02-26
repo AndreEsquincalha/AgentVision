@@ -11,6 +11,7 @@ from app.database import SessionLocal
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
 from app.modules.auth.service import hash_password
+from app.modules.auth.models import UserRole
 
 
 def seed_admin_user() -> None:
@@ -40,6 +41,7 @@ def seed_admin_user() -> None:
             'hashed_password': hashed_pwd,
             'name': settings.admin_name,
             'is_active': True,
+            'role': UserRole.admin.value,
         }
 
         user = repository.create(user_data)

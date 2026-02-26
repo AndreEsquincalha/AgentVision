@@ -3,6 +3,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.shared.security import (
+    sanitize_email_recipient,
+    sanitize_string_dict,
+    validate_json_size,
+)
+
 
 class DeliveryConfigCreate(BaseModel):
     """Schema para criacao de uma configuracao de entrega."""
@@ -44,10 +50,17 @@ class DeliveryConfigCreate(BaseModel):
     @classmethod
     def validate_recipients(cls, v: list[str]) -> list[str]:
         """Valida que a lista de destinatarios nao esta vazia e nao contem valores vazios."""
-        cleaned = [r.strip() for r in v if r and r.strip()]
+        cleaned = [sanitize_email_recipient(r) for r in v if r and r.strip()]
         if not cleaned:
             raise ValueError('A lista de destinatarios nao pode estar vazia')
         return cleaned
+
+    @field_validator('channel_config')
+    @classmethod
+    def validate_channel_config_size(cls, v: dict | None) -> dict | None:
+        """Valida tamanho maximo do JSON de configuracao."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'channel_config')
 
 
 class DeliveryConfigUpdate(BaseModel):
@@ -77,10 +90,17 @@ class DeliveryConfigUpdate(BaseModel):
         """Valida que a lista de destinatarios nao contem valores vazios (se fornecida)."""
         if v is None:
             return v
-        cleaned = [r.strip() for r in v if r and r.strip()]
+        cleaned = [sanitize_email_recipient(r) for r in v if r and r.strip()]
         if not cleaned:
             raise ValueError('A lista de destinatarios nao pode estar vazia')
         return cleaned
+
+    @field_validator('channel_config')
+    @classmethod
+    def validate_channel_config_size(cls, v: dict | None) -> dict | None:
+        """Valida tamanho maximo do JSON de configuracao."""
+        sanitized = sanitize_string_dict(v) if v is not None else v
+        return validate_json_size(sanitized, 50 * 1024, 'channel_config')
 
 
 class DeliveryConfigResponse(BaseModel):

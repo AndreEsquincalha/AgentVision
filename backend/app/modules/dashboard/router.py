@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.dashboard.schemas import (
     DashboardSummaryResponse,
@@ -28,7 +28,7 @@ def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:
 
 @router.get('/summary', response_model=DashboardSummaryResponse)
 def get_summary(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> DashboardSummaryResponse:
     """
@@ -47,7 +47,7 @@ def get_summary(
     response_model=list[RecentExecutionResponse],
 )
 def get_recent_executions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> list[RecentExecutionResponse]:
     """
@@ -65,7 +65,7 @@ def get_recent_executions(
     response_model=list[UpcomingExecutionResponse],
 )
 def get_upcoming_executions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> list[UpcomingExecutionResponse]:
     """
@@ -83,7 +83,7 @@ def get_upcoming_executions(
     response_model=list[RecentFailureResponse],
 )
 def get_recent_failures(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> list[RecentFailureResponse]:
     """
@@ -110,7 +110,7 @@ def get_token_usage(
         default=None,
         description='Filtrar por provider (anthropic, openai, google, ollama).',
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator', 'viewer')),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> TokenUsageResponse:
     """

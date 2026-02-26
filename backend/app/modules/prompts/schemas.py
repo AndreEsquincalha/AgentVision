@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.shared.schemas import PaginatedResponse
+from app.shared.security import sanitize_name, sanitize_text
 
 
 class PromptTemplateCreate(BaseModel):
@@ -36,7 +37,7 @@ class PromptTemplateCreate(BaseModel):
         """Valida que o nome nao esta vazio."""
         if not v or not v.strip():
             raise ValueError('O nome do template nao pode estar vazio')
-        return v.strip()
+        return sanitize_name(v)
 
     @field_validator('content')
     @classmethod
@@ -44,7 +45,23 @@ class PromptTemplateCreate(BaseModel):
         """Valida que o conteudo nao esta vazio."""
         if not v or not v.strip():
             raise ValueError('O conteudo do template nao pode estar vazio')
-        return v
+        return sanitize_text(v)
+
+    @field_validator('description')
+    @classmethod
+    def description_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza descricao (se fornecida)."""
+        if v is None:
+            return v
+        return sanitize_text(v)
+
+    @field_validator('category')
+    @classmethod
+    def category_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza categoria (se fornecida)."""
+        if v is None:
+            return v
+        return sanitize_text(v)
 
 
 class PromptTemplateUpdate(BaseModel):
@@ -75,7 +92,23 @@ class PromptTemplateUpdate(BaseModel):
         """Valida que o conteudo nao esta vazio (se fornecido)."""
         if v is not None and not v.strip():
             raise ValueError('O conteudo do template nao pode estar vazio')
-        return v
+        return sanitize_text(v) if v is not None else v
+
+    @field_validator('description')
+    @classmethod
+    def description_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza descricao (se fornecida)."""
+        if v is None:
+            return v
+        return sanitize_text(v)
+
+    @field_validator('category')
+    @classmethod
+    def category_sanitized(cls, v: str | None) -> str | None:
+        """Sanitiza categoria (se fornecida)."""
+        if v is None:
+            return v
+        return sanitize_text(v)
 
 
 class PromptTemplateResponse(BaseModel):

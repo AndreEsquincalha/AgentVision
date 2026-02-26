@@ -1,9 +1,11 @@
 import uuid
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.modules.auth.models import User
+from app.modules.auth.models import TokenBlacklist, User
 
 
 class UserRepository:
@@ -66,3 +68,39 @@ class UserRepository:
         self._db.commit()
         self._db.refresh(user)
         return user
+
+
+class TokenBlacklistRepository:
+    """
+    Repositorio de tokens revogados.
+    """
+
+    def __init__(self, db: Session) -> None:
+        """Inicializa o repositorio com a sessao do banco."""
+        self._db = db
+
+    def add(self, jti: str, expires_at: datetime) -> TokenBlacklist:
+        """
+        Adiciona um token revogado.
+        """
+        token = TokenBlacklist(jti=jti, expires_at=expires_at)
+        self._db.add(token)
+        self._db.commit()
+        self._db.refresh(token)
+        return token
+
+    def is_blacklisted(self, jti: str) -> bool:
+        """
+        Verifica se um token esta na blacklist.
+        """
+        stmt = select(TokenBlacklist).where(TokenBlacklist.jti == jti)
+        return self._db.execute(stmt).scalar_one_or_none() is not None
+
+    def cleanup_expired(self, now: datetime) -> int:
+        """
+        Remove tokens expirados da blacklist.
+        """
+        stmt = delete(TokenBlacklist).where(TokenBlacklist.expires_at < now)
+        result = self._db.execute(stmt)
+        self._db.commit()
+        return int(result.rowcount or 0)

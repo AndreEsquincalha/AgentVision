@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.delivery.repository import DeliveryRepository
 from app.modules.delivery.schemas import (
@@ -47,7 +47,7 @@ def get_delivery_service(
 @router.get('/configs', response_model=list[DeliveryConfigResponse])
 def list_delivery_configs(
     job_id: uuid.UUID = Query(..., description='ID do job'),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> list[DeliveryConfigResponse]:
     """
@@ -61,7 +61,7 @@ def list_delivery_configs(
 @router.get('/configs/{config_id}', response_model=DeliveryConfigResponse)
 def get_delivery_config(
     config_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> DeliveryConfigResponse:
     """
@@ -73,7 +73,7 @@ def get_delivery_config(
 @router.post('/configs', response_model=DeliveryConfigResponse, status_code=201)
 def create_delivery_config(
     data: DeliveryConfigCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> DeliveryConfigResponse:
     """
@@ -89,7 +89,7 @@ def create_delivery_config(
 def update_delivery_config(
     config_id: uuid.UUID,
     data: DeliveryConfigUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> DeliveryConfigResponse:
     """
@@ -103,7 +103,7 @@ def update_delivery_config(
 @router.delete('/configs/{config_id}', response_model=MessageResponse)
 def delete_delivery_config(
     config_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> MessageResponse:
     """
@@ -124,7 +124,7 @@ def delete_delivery_config(
 @router.get('/logs', response_model=list[DeliveryLogResponse])
 def list_delivery_logs(
     execution_id: uuid.UUID = Query(..., description='ID da execucao'),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> list[DeliveryLogResponse]:
     """
@@ -138,7 +138,7 @@ def list_delivery_logs(
 @router.post('/logs/{log_id}/retry', response_model=DeliveryLogResponse)
 def retry_delivery(
     log_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: DeliveryService = Depends(get_delivery_service),
 ) -> DeliveryLogResponse:
     """

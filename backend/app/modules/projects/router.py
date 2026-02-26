@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.projects.repository import ProjectRepository
 from app.modules.projects.schemas import (
@@ -50,7 +50,7 @@ def list_projects(
     per_page: int = Query(20, ge=1, le=100, description='Itens por pagina'),
     search: str | None = Query(None, description='Busca por nome ou descricao'),
     is_active: bool | None = Query(None, description='Filtrar por status ativo/inativo'),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ProjectService = Depends(get_project_service),
 ) -> ProjectListResponse:
     """
@@ -70,7 +70,7 @@ def list_projects(
 @router.get('/{project_id}', response_model=ProjectResponse)
 def get_project(
     project_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ProjectService = Depends(get_project_service),
 ) -> ProjectResponse:
     """
@@ -84,7 +84,7 @@ def get_project(
 @router.post('', response_model=ProjectResponse, status_code=201)
 def create_project(
     data: ProjectCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ProjectService = Depends(get_project_service),
 ) -> ProjectResponse:
     """
@@ -99,7 +99,7 @@ def create_project(
 def update_project(
     project_id: uuid.UUID,
     data: ProjectUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ProjectService = Depends(get_project_service),
 ) -> ProjectResponse:
     """
@@ -114,7 +114,7 @@ def update_project(
 @router.delete('/{project_id}', response_model=MessageResponse)
 def delete_project(
     project_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: ProjectService = Depends(get_project_service),
 ) -> MessageResponse:
     """

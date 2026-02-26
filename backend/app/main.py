@@ -1,4 +1,5 @@
 import logging
+import re
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
@@ -7,14 +8,69 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.database import SessionLocal
 from app.shared.exceptions import (
     BadRequestException,
     ForbiddenException,
     NotFoundException,
     UnauthorizedException,
 )
+from app.modules.audit.repository import AuditLogRepository
+from app.modules.audit.service import AuditLogService
+from app.modules.auth.service import decode_token
 
 logger = logging.getLogger(__name__)
+
+# Limites e headers de seguranca
+_MAX_BODY_SIZE_BYTES = 10 * 1024 * 1024
+_SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': "default-src 'self'",
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+}
+
+_UUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+    r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
+def _extract_resource(path: str) -> tuple[str | None, str | None]:
+    """Extrai resource_type e resource_id da URL."""
+    parts = path.strip('/').split('/')
+    if len(parts) < 2 or parts[0] != 'api':
+        return None, None
+    resource_type = parts[1]
+    resource_id = parts[2] if len(parts) > 2 else None
+    if resource_id and not _UUID_RE.match(resource_id):
+        return resource_type, resource_id
+    return resource_type, resource_id
+
+
+def _get_user_id_from_request(request: Request) -> str | None:
+    """Extrai user_id do token JWT (se presente)."""
+    auth_header = request.headers.get('authorization', '')
+    if not auth_header.lower().startswith('bearer '):
+        return None
+    token = auth_header.split(' ', 1)[1]
+    try:
+        payload = decode_token(token)
+        return payload.get('sub')
+    except Exception:
+        return None
+
+
+def _get_request_ip(request: Request) -> str | None:
+    """Obtencao de IP do cliente com suporte a proxy."""
+    forwarded = request.headers.get('x-forwarded-for')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    if request.client:
+        return request.client.host
+    return None
 
 # Valores padrao inseguros que devem ser alterados em producao
 _INSECURE_DEFAULTS: dict[str, str] = {
@@ -82,6 +138,92 @@ app.add_middleware(
     expose_headers=['Content-Disposition'],
 )
 
+
+@app.middleware('http')
+async def request_size_limit_middleware(
+    request: Request,
+    call_next,
+) -> JSONResponse:
+    """Limita tamanho maximo do payload."""
+    body = await request.body()
+    if len(body) > _MAX_BODY_SIZE_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={
+                'success': False,
+                'message': 'Payload muito grande. Limite: 10MB.',
+            },
+        )
+    request._body = body
+    return await call_next(request)
+
+
+@app.middleware('http')
+async def security_headers_middleware(request: Request, call_next) -> JSONResponse:
+    """Aplica headers de seguranca."""
+    response = await call_next(request)
+    for key, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(key, value)
+    return response
+
+
+@app.middleware('http')
+async def audit_log_middleware(request: Request, call_next) -> JSONResponse:
+    """Registra logs de auditoria automaticamente."""
+    response = await call_next(request)
+
+    if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        return response
+
+    if not request.url.path.startswith('/api/'):
+        return response
+
+    # Auth é tratado no proprio router
+    if request.url.path.startswith('/api/auth'):
+        return response
+
+    if response.status_code >= 400:
+        return response
+
+    resource_type, resource_id = _extract_resource(request.url.path)
+    if not resource_type:
+        return response
+
+    action_map = {
+        'POST': 'create',
+        'PUT': 'update',
+        'PATCH': 'update',
+        'DELETE': 'delete',
+    }
+    action = action_map.get(request.method, request.method.lower())
+    user_id = _get_user_id_from_request(request)
+    parsed_user_id = None
+    if user_id and _UUID_RE.match(user_id):
+        from uuid import UUID
+        parsed_user_id = UUID(user_id)
+
+    db = SessionLocal()
+    try:
+        service = AuditLogService(AuditLogRepository(db))
+        service.create_log(
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            user_id=parsed_user_id,
+            ip_address=_get_request_ip(request),
+            details={
+                'path': request.url.path,
+                'method': request.method,
+                'status_code': response.status_code,
+            },
+        )
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+    return response
+
 # -------------------------------------------------------------------------
 # Handlers globais de excecoes
 # -------------------------------------------------------------------------
@@ -138,6 +280,7 @@ from app.modules.jobs.router import router as jobs_router
 from app.modules.projects.router import router as projects_router
 from app.modules.prompts.router import router as prompts_router
 from app.modules.settings.router import router as settings_router
+from app.modules.audit.router import router as audit_router
 
 app.include_router(auth_router)
 app.include_router(dashboard_router)
@@ -147,6 +290,7 @@ app.include_router(delivery_router)
 app.include_router(executions_router)
 app.include_router(prompts_router)
 app.include_router(settings_router)
+app.include_router(audit_router)
 
 
 # -------------------------------------------------------------------------

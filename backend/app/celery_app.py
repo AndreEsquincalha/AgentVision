@@ -51,10 +51,15 @@ celery_app.conf.update(
             'task': 'app.modules.jobs.tasks.cleanup_stale_executions',
             'schedule': 300.0,  # a cada 5 minutos (300 segundos)
         },
+        'cleanup-token-blacklist-every-hour': {
+            'task': 'app.modules.auth.tasks.cleanup_token_blacklist',
+            'schedule': 3600.0,
+        },
     },
 )
 
 # Autodiscover de tasks em todos os modulos
 celery_app.autodiscover_tasks([
     'app.modules.jobs',
+    'app.modules.auth',
 ])

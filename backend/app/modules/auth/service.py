@@ -6,8 +6,8 @@ from jose import JWTError, jwt
 
 from app.config import settings
 from app.modules.auth.models import User
-from app.modules.auth.repository import UserRepository
-from app.modules.auth.schemas import TokenResponse, UserResponse
+from app.modules.auth.repository import TokenBlacklistRepository, UserRepository
+from app.modules.auth.schemas import TokenResponse
 from app.shared.exceptions import UnauthorizedException
 
 
@@ -133,9 +133,14 @@ class AuthService:
     e obtencao de dados do usuario autenticado.
     """
 
-    def __init__(self, repository: UserRepository) -> None:
-        """Inicializa o servico com o repositorio de usuarios."""
+    def __init__(
+        self,
+        repository: UserRepository,
+        token_repository: TokenBlacklistRepository | None = None,
+    ) -> None:
+        """Inicializa o servico com os repositorios necessarios."""
         self._repository = repository
+        self._token_repository = token_repository
 
     def authenticate(self, email: str, password: str) -> TokenResponse:
         """
@@ -190,6 +195,11 @@ class AuthService:
         if token_type != 'refresh':
             raise UnauthorizedException('Token invalido: tipo incorreto')
 
+        jti = payload.get('jti')
+        if jti and self._token_repository:
+            if self._token_repository.is_blacklisted(jti):
+                raise UnauthorizedException('Token revogado')
+
         subject = payload.get('sub')
         if not subject:
             raise UnauthorizedException('Token invalido: subject ausente')
@@ -231,6 +241,11 @@ class AuthService:
         if token_type != 'access':
             raise UnauthorizedException('Token invalido: tipo incorreto')
 
+        jti = payload.get('jti')
+        if jti and self._token_repository:
+            if self._token_repository.is_blacklisted(jti):
+                raise UnauthorizedException('Token revogado')
+
         subject = payload.get('sub')
         if not subject:
             raise UnauthorizedException('Token invalido: subject ausente')
@@ -243,3 +258,20 @@ class AuthService:
             raise UnauthorizedException('Usuario desativado')
 
         return user
+
+    def blacklist_token(self, token: str) -> None:
+        """
+        Adiciona um token JWT na blacklist.
+        """
+        if not self._token_repository:
+            raise UnauthorizedException('Repositorio de tokens nao configurado')
+
+        payload = decode_token(token)
+        jti = payload.get('jti')
+        exp = payload.get('exp')
+        if not jti or not exp:
+            raise UnauthorizedException('Token invalido para blacklist')
+
+        expires_at = datetime.fromtimestamp(exp, tz=UTC)
+        if not self._token_repository.is_blacklisted(jti):
+            self._token_repository.add(jti, expires_at)

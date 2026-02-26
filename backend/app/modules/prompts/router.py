@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_roles
 from app.modules.auth.models import User
 from app.modules.prompts.repository import PromptTemplateRepository
 from app.modules.prompts.schemas import (
@@ -52,7 +52,7 @@ def list_templates(
     per_page: int = Query(20, ge=1, le=100, description='Itens por pagina'),
     search: str | None = Query(None, description='Busca por nome ou descricao'),
     category: str | None = Query(None, description='Filtrar por categoria'),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: PromptTemplateService = Depends(get_prompt_template_service),
 ) -> PromptTemplateListResponse:
     """
@@ -72,7 +72,7 @@ def list_templates(
 @router.get('/{template_id}', response_model=PromptTemplateResponse)
 def get_template(
     template_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: PromptTemplateService = Depends(get_prompt_template_service),
 ) -> PromptTemplateResponse:
     """Retorna os dados de um template de prompt especifico."""
@@ -82,7 +82,7 @@ def get_template(
 @router.post('', response_model=PromptTemplateResponse, status_code=201)
 def create_template(
     data: PromptTemplateCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: PromptTemplateService = Depends(get_prompt_template_service),
 ) -> PromptTemplateResponse:
     """
@@ -97,7 +97,7 @@ def create_template(
 def update_template(
     template_id: uuid.UUID,
     data: PromptTemplateUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: PromptTemplateService = Depends(get_prompt_template_service),
 ) -> PromptTemplateResponse:
     """
@@ -112,7 +112,7 @@ def update_template(
 @router.delete('/{template_id}', response_model=MessageResponse)
 def delete_template(
     template_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles('admin', 'operator')),
     service: PromptTemplateService = Depends(get_prompt_template_service),
 ) -> MessageResponse:
     """
